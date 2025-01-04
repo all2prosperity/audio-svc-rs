@@ -1,7 +1,7 @@
-mod config;
+pub mod config;
 mod db;
 mod handlers;
-mod models;
+pub mod models;
 mod services;
 mod structures;
 mod utils;
