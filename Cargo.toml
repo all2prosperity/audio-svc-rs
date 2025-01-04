@@ -39,3 +39,6 @@ axum = "0.7.9"                                # Web 框架
 
 tokio = { version = "1.42.0", features = ["full"] } # 异步运行时
 lazy_static = "1.5"                                 # 静态变量
+
+
+llm-audio-toolkit = { git = "https://github.com/all2prosperity/llm-audio-toolkit.git" }
