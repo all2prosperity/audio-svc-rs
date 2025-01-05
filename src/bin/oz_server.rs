@@ -9,6 +9,8 @@ async fn health_check(State(_state): State<AppState>) -> &'static str {
 
 async fn setup_router(app_state: AppState) -> Router {
     Router::new()
+        .route("/api/roles", get(get_roles))
+        .route("/api/role/switch", post(switch_role))
         .route("/health", get(health_check))
         .with_state(app_state)
 }
