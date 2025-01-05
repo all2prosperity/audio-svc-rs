@@ -42,3 +42,4 @@ lazy_static = "1.5"                                 # 静态变量
 
 
 llm-audio-toolkit = { git = "https://github.com/all2prosperity/llm-audio-toolkit.git" }
+xid = "1.1.1"
