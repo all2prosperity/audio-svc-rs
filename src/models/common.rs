@@ -1,8 +1,8 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    users (user_id) {
-        user_id -> Int4,
+    user (id) {
+        id -> Varchar,
         name -> Varchar,
         email -> Varchar,
         password -> Varchar,
@@ -22,8 +22,12 @@ diesel::table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
     },
-    roles (role_id) {
-        role_id -> Int4,
-        role_name -> Varchar,
+    role (id) {
+        id -> Text,
+        name -> Text,
+        prompt -> Text,
+        voice_id -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
