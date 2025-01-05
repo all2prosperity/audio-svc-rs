@@ -1,32 +1,38 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    user (id) {
-        id -> Varchar,
-        name -> Varchar,
-        email -> Varchar,
-        password -> Varchar,
-    },
+    users (xid) {
+        xid -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     sessions (session_id) {
-        session_id -> Int4,
-        user_id -> Int4,
+        session_id -> Varchar,
+        xid -> Varchar,
+        role_id -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-        role_id -> Int4,
-    },
+    }
+}
+
+diesel::table! {
     sections (section_id) {
-        section_id -> Int4,
-        session_id -> Int4,
-        user_content -> Varchar,
-        assistant_content -> Varchar,
+        section_id -> Varchar,
+        session_id -> Varchar,
+        user_message -> Text,
+        assistant_message -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
-    },
-    role (id) {
-        id -> Text,
-        name -> Text,
+    }
+}
+
+diesel::table! {
+    roles (role_id) {
+        role_id -> Varchar,
         prompt -> Text,
-        voice_id -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

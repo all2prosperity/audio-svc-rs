@@ -6,4 +6,4 @@ file = "src/models/common.rs"
 custom_type_derives = ["diesel::query_builder::QueryId", "Clone"]
 
 [migrations_directory]
-dir = "/mnt/hgfs/shgithub/rust/audio-svc-rs/migrations"
+dir = "./migrations"
