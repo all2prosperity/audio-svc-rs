@@ -1,7 +1,6 @@
-use oz_server::models::establish_connection;
+use oz_server::utils::insert_default_role;
 
-#[test]
-fn test_model() {
-    println!("test_model");
-    establish_connection();
+#[tokio::test]
+async fn test_model() {
+    insert_default_role();
 }

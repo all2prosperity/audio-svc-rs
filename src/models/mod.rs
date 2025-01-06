@@ -1,4 +1,6 @@
 pub mod role;
+pub mod section;
+pub mod session;
 pub mod schema;
 pub mod user_role;
 use diesel::prelude::*;

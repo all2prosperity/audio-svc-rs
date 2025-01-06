@@ -24,16 +24,8 @@ diesel::table! {
 diesel::table! {
     sessions (session_id) {
         session_id -> Varchar,
-        xid -> Varchar,
+        user_id -> Varchar,
         role_id -> Varchar,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-    }
-}
-
-diesel::table! {
-    users (xid) {
-        xid -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -48,4 +40,18 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(roles, sections, sessions, users, user_role);
+diesel::table! {
+    users (id) {
+        id -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(
+    roles,
+    sections,
+    sessions,
+    user_role,
+    users,
+);
