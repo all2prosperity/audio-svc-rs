@@ -1,3 +1,5 @@
+pub mod role;
+pub mod schema;
 
 use diesel::prelude::*;
 

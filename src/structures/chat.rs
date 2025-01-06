@@ -1,4 +1,5 @@
-use crate::models::{establish_connection, Role};
+use crate::models::{establish_connection, role};
+use crate::models::schema::roles::dsl::*;
 
 pub struct Chat {
     xid: String,
@@ -19,8 +20,8 @@ impl Chat {
         
         let conn = establish_connection();
 
-        let results = roles
-            .filter(role_id.eq(self.role_id))
+        let results = roles::
+            filter(role_id.eq(self.role_id))
             .limit(1)
             .select(Role)
             .load(&conn)
