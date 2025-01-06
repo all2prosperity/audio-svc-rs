@@ -4,8 +4,8 @@ diesel::table! {
     roles (role_id) {
         role_id -> Varchar,
         prompt -> Text,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Int8,
+        updated_at -> Int8,
     }
 }
 

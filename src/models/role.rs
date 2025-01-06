@@ -8,6 +8,6 @@ use chrono::{DateTime, Utc};
 pub struct Role {
     pub role_id: String,
     pub prompt: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
