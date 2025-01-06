@@ -35,7 +35,7 @@ hound = "3.5"  # WAV 文件处理
 anyhow = "1.0"                                # 错误处理
 thiserror = "2.0"                             # 自定义错误类型
 uuid = { version = "1.0", features = ["v4"] } # UUID 生成
-axum = "0.8.1"                                # Web 框架
+axum = {version = "0.8.1", features = ["ws"]}                                # Web 框架
 
 tokio = { version = "1.42.0", features = ["full"] } # 异步运行时
 lazy_static = "1.5"                                 # 静态变量
@@ -47,3 +47,6 @@ llm-audio-toolkit = { git = "https://github.com/all2prosperity/llm-audio-toolkit
 xid = "1.1.1"
 chrono = "0.4.39"
 async-openai = "0.26.0"
+
+base64 = "0.22.1"
+tracing = "0.1"

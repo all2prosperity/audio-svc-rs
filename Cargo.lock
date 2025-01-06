@@ -226,6 +226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d6fd624c75e18b3b4c6b9caf42b1afe24437daaee904069137d8bab077be8b8"
 dependencies = [
  "axum-core",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -245,8 +246,10 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1",
  "sync_wrapper",
  "tokio",
+ "tokio-tungstenite",
  "tower",
  "tower-layer",
  "tower-service",
@@ -2147,6 +2150,7 @@ dependencies = [
  "anyhow",
  "async-openai",
  "axum",
+ "base64 0.22.1",
  "bcrypt",
  "chrono",
  "config",
@@ -2164,6 +2168,7 @@ dependencies = [
  "thiserror 2.0.9",
  "tokio",
  "tower-http",
+ "tracing",
  "uuid",
  "xid",
 ]
