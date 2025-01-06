@@ -1,6 +1,9 @@
-use axum::{extract::State, routing::get, Router};
+use axum::routing::post;
+use axum::{extract::State, routing::get, Router, http};
+use tower_http::cors::{Any, CorsLayer};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
+use oz_server::handlers::{get_roles, switch_role};
 use oz_server::{config::OZ_SERVER_CONFIG, structures::AppState};
 
 async fn health_check(State(_state): State<AppState>) -> &'static str {
@@ -8,10 +11,33 @@ async fn health_check(State(_state): State<AppState>) -> &'static str {
 }
 
 async fn setup_router(app_state: AppState) -> Router {
+    let cors = CorsLayer::new()
+        // 允许所有源
+        .allow_origin(Any)
+        // 允许的请求方法
+        .allow_methods([
+            http::Method::GET,
+            http::Method::POST,
+            http::Method::PUT,
+            http::Method::DELETE,
+            http::Method::OPTIONS,
+        ])
+        // 允许的请求头
+        .allow_headers([
+            http::header::CONTENT_TYPE,
+            http::header::AUTHORIZATION,
+            http::header::ACCEPT,
+            http::HeaderName::from_static("x-oz-device-id"),
+        ])
+        // 允许携带认证信息
+        .allow_credentials(true);
+
+
     Router::new()
         .route("/api/roles", get(get_roles))
         .route("/api/role/switch", post(switch_role))
         .route("/health", get(health_check))
+        .layer(cors)
         .with_state(app_state)
 }
 
