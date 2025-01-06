@@ -1,6 +1,8 @@
-use diesel::prelude::*;
+use std::time::SystemTime;
+
 use crate::models::schema;
-use chrono::{DateTime, Utc};
+//use chrono::{DateTime, Utc};
+use diesel::prelude::*;
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = schema::roles)]
@@ -8,6 +10,6 @@ use chrono::{DateTime, Utc};
 pub struct Role {
     pub role_id: String,
     pub prompt: String,
-    pub created_at: i64,
-    pub updated_at: i64,
+    pub created_at: SystemTime,
+    pub updated_at: SystemTime,
 }

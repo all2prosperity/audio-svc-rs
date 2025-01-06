@@ -15,7 +15,11 @@ pub struct Chat {
 
 impl Chat {
     pub fn new(xid: String, session_id: String, role_id: String) -> Self {
-        Self { xid, session_id, role_id }
+        Self {
+            xid,
+            session_id,
+            role_id,
+        }
     }
 
     pub fn on_recv_message(&mut self, message: String) {

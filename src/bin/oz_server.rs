@@ -1,10 +1,10 @@
 use axum::routing::post;
-use axum::{extract::State, routing::get, Router, http};
-use tower_http::cors::{Any, CorsLayer};
+use axum::{extract::State, http, routing::get, Router};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use oz_server::handlers::{get_roles, switch_role};
 use oz_server::{config::OZ_SERVER_CONFIG, structures::AppState};
+use tower_http::cors::{Any, CorsLayer};
 
 async fn health_check(State(_state): State<AppState>) -> &'static str {
     "OK"
@@ -28,10 +28,11 @@ async fn setup_router(app_state: AppState) -> Router {
             http::header::AUTHORIZATION,
             http::header::ACCEPT,
             http::HeaderName::from_static("x-oz-device-id"),
+            http::HeaderName::from_static("x-oz-dev-id"),
+            http::HeaderName::from_static("x-oz-user-id"),
         ])
         // 允许携带认证信息
         .allow_credentials(true);
-
 
     Router::new()
         .route("/api/roles", get(get_roles))

@@ -4,8 +4,8 @@ diesel::table! {
     roles (role_id) {
         role_id -> Varchar,
         prompt -> Text,
-        created_at -> Int8,
-        updated_at -> Int8,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 
@@ -38,9 +38,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    roles,
-    sections,
-    sessions,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(roles, sections, sessions, users,);
