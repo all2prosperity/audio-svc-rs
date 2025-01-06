@@ -15,8 +15,8 @@ pub struct RolePayload {
 
 #[derive(Serialize)]
 pub struct RoleInfo {
-    pub role_id: String,
-    pub role_name: String,
+    pub id: String,
+    pub name: String,
     pub picture_url: String,
 }
 

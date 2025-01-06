@@ -1,8 +1,9 @@
+use axum::middleware;
 use axum::routing::post;
 use axum::{extract::State, http, routing::get, Router};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
-use oz_server::handlers::{get_roles, switch_role};
+use oz_server::handlers::{auth, get_roles, switch_role};
 use oz_server::{config::OZ_SERVER_CONFIG, structures::AppState};
 use tower_http::cors::{Any, CorsLayer};
 
@@ -38,6 +39,7 @@ async fn setup_router(app_state: AppState) -> Router {
         .route("/api/roles", get(get_roles))
         .route("/api/role/switch", post(switch_role))
         .route("/health", get(health_check))
+        .route_layer(middleware::from_fn(auth::auth))
         .layer(cors)
         .with_state(app_state)
 }

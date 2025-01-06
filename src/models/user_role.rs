@@ -1,16 +1,14 @@
 use std::time::SystemTime;
 
 use crate::models::schema;
-//use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 
-#[derive(Queryable, Selectable)]
-#[diesel(table_name = schema::roles)]
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = schema::user_role)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct Role {
+pub struct UseRole {
     pub id: String,
-    pub name: String,
-    pub prompt: String,
+    pub role_id: String,
     pub created_at: SystemTime,
     pub updated_at: SystemTime,
 }

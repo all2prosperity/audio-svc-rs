@@ -1,11 +1,11 @@
-use crate::models::{establish_connection, role};
 use crate::models::schema::roles::dsl;
+use crate::models::{establish_connection, role};
 
-use diesel::QueryDsl;
-use std::iter::Iterator;
-use diesel::SelectableHelper;
 use diesel::ExpressionMethods;
+use diesel::QueryDsl;
 use diesel::RunQueryDsl;
+use diesel::SelectableHelper;
+use std::iter::Iterator;
 
 pub struct Chat {
     xid: String,
@@ -27,11 +27,11 @@ impl Chat {
         if self.session_id == "" {
             self.session_id = uuid::Uuid::new_v4().to_string();
         }
-        
+
         let conn = &mut establish_connection();
 
         let results = dsl::roles
-            .filter(dsl::role_id.eq(self.role_id.clone()))
+            .filter(dsl::id.eq(self.role_id.clone()))
             .limit(1)
             .select(role::Role::as_select())
             .load(conn)

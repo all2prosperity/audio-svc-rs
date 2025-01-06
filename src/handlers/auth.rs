@@ -8,15 +8,12 @@ use axum::{
     Router,
 };
 
-#[derive(Clone)]
-pub struct CurrentUser {
-    pub user_id: String, // 无所吊谓，可能是dev_id，也可能是user_id,总之，把它当作user_id用。
-}
+use crate::structures::user::CurrentUser;
 
 const AUTH_HEADER_NAME: &str = "x-oz-user-id";
 const AUTH_HEADER_DEV_ID: &str = "x-oz-dev-id";
 
-async fn auth(mut req: Request, next: Next) -> Result<Response, StatusCode> {
+pub async fn auth(mut req: Request, next: Next) -> Result<Response, StatusCode> {
     let auth_header = req
         .headers()
         .get(AUTH_HEADER_NAME)

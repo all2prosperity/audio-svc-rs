@@ -1,5 +1,6 @@
 pub mod role;
 pub mod schema;
+pub mod user_role;
 use diesel::prelude::*;
 
 use crate::config::OZ_SERVER_CONFIG;

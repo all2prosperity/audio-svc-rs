@@ -3,3 +3,4 @@ pub mod role;
 pub use app_state::AppState;
 pub use role::*;
 pub mod chat;
+pub mod user;

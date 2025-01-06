@@ -1,8 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    roles (role_id) {
-        role_id -> Varchar,
+    roles (id) {
+        id -> Varchar,
+        name -> Text,
         prompt -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -38,4 +39,13 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(roles, sections, sessions, users,);
+diesel::table! {
+    user_role (id) {
+        id -> Varchar,
+        role_id -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(roles, sections, sessions, users, user_role);
