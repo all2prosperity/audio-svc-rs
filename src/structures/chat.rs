@@ -12,6 +12,7 @@ use diesel::QueryDsl;
 use diesel::RunQueryDsl;
 use diesel::SelectableHelper;
 use crate::config::OZ_SERVER_CONFIG;
+use crate::json::openai_response::OpenAIResponse;
 
 pub struct Chat {
     xid: String,
@@ -82,6 +83,8 @@ impl Chat {
         let response = client.chat().create(request).await?;
 
         println!("{}", serde_json::to_string(&response).unwrap());
+
+        let response = serde_json::from_str::<OpenAIResponse>(&serde_json::to_string(&response).unwrap());
 
         Ok("".to_string())
     }

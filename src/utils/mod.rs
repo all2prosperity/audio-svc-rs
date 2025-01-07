@@ -21,6 +21,5 @@ pub fn insert_default_role() {
     diesel::insert_into(schema::roles::table)
         .values(&role)
         .returning(Role::as_returning())
-        .get_result(conn)
-        .expect("Error inserting role");
+        .get_result(conn);
 }

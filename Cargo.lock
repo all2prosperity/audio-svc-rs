@@ -1790,7 +1790,7 @@ checksum = "4ee93343901ab17bd981295f2cf0026d4ad018c7c31ba84549a4ddbb47a45104"
 [[package]]
 name = "llm-audio-toolkit"
 version = "0.1.0"
-source = "git+https://github.com/all2prosperity/llm-audio-toolkit.git#ec9a4a8d25ba63091d6456824b8dd5e3bf2e75a4"
+source = "git+ssh://git@github.com/all2prosperity/llm-audio-toolkit.git#ec9a4a8d25ba63091d6456824b8dd5e3bf2e75a4"
 dependencies = [
  "anyhow",
  "async-openai",
