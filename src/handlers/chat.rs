@@ -20,6 +20,16 @@ use async_openai::types::ChatCompletionRequestMessage;
 use crate::models::session::Session;
 use crate::constant::*;
 
+use axum::{
+    extract::{Extension, Request},
+    http,
+    http::StatusCode,
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
+
 pub struct Chat {
     user_id: String,
     session_id: String,
@@ -69,6 +79,8 @@ impl Chat {
     async fn fill_message_by_session_id(&self, conn: &mut diesel::PgConnection, messages: &mut Vec<ChatCompletionRequestMessage>, session_id: String) -> Result<(), Box<dyn std::error::Error>> {
         let sections = schema::sections::table
             .filter(schema::sections::session_id.eq(session_id))
+            .order(schema::sections::created_at.desc())
+            .limit(SECTION_LIMIT)
             .select(Section::as_select())
             .load(conn)?;
 
@@ -87,33 +99,39 @@ impl Chat {
         Ok(())
     }
 
-    // async fn check_need_new_session(&self, conn: &mut diesel::PgConnection) -> Result<bool, Box<dyn std::error::Error>> {
-    //     let session = schema::sessions::table
-    //         .filter(schema::sessions::session_id.eq(self.session_id.clone()))
-    //         .select(Session::as_select())
-    //         .load(conn)?;
+    async fn check_need_new_session(&self, conn: &mut diesel::PgConnection) -> Result<bool, Box<dyn std::error::Error>> {
+        let session = schema::sessions::table
+            .filter(schema::sessions::session_id.eq(self.session_id.clone()))
+            .select(Session::as_select())
+            .load(conn)?;
 
-    //     if session.is_empty() {
-    //         return Ok(true);
-    //     }
+        if session.is_empty() {
+            return Ok(true);
+        }
 
-    //     let last_session = session.last()?;
-    //     if last_session.role_id != self.role_id {
-    //         return Ok(true);
-    //     }
+        let last_session = session.last().ok_or(Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Session not found")))?;
+        if last_session.role_id != self.role_id {
+            return Ok(true);
+        }
 
-    //     Ok(false)
-    // }
+        Ok(false)
+    }
 
     pub async fn on_recv_message(&mut self, message: String) -> Result<String, Box<dyn std::error::Error>> {
         println!("recv message: {}", message);
+        let conn = &mut establish_connection();
+
         let mut is_first = false;
         if self.session_id == "" {
             self.session_id = uuid::Uuid::new_v4().to_string();
             is_first = true;
         }
-
-        let conn = &mut establish_connection();
+        else {
+            if self.check_need_new_session(conn).await? {
+                self.session_id = uuid::Uuid::new_v4().to_string();
+                is_first = true;
+            }
+        }
 
         let results = dsl::roles
             .filter(dsl::id.eq(self.role_id.clone()))
@@ -166,4 +184,11 @@ impl Chat {
 
         Ok("".to_string())
     }
+}
+
+pub async fn chat(
+    mut req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    Err(StatusCode::NOT_FOUND)
 }

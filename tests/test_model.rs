@@ -1,5 +1,5 @@
 use oz_server::utils::insert_default_role;
-use oz_server::structures::chat;
+use oz_server::handlers::chat;
 
 #[tokio::test]
 async fn test_model() {
