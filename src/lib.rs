@@ -6,3 +6,4 @@ pub mod services;
 pub mod structures;
 pub mod utils;
 pub mod json;
+pub mod constant;

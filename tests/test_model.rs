@@ -9,6 +9,6 @@ async fn test_model() {
 
 #[tokio::test]
 async fn test_chat() {
-    chat::Chat::new("1".to_string(), "".to_string(), "1".to_string())
-        .on_recv_message("你好".to_string()).await.unwrap();
+    chat::Chat::new("1".to_string(), "4322f33b-3cac-49e4-8310-0584e9608220".to_string(), "1".to_string())
+        .on_recv_message("那你给我讲讲炉石规则吧".to_string()).await.unwrap();
 }
