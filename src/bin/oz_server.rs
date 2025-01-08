@@ -31,14 +31,15 @@ async fn setup_router(app_state: AppState) -> Router {
             http::HeaderName::from_static("x-oz-device-id"),
             http::HeaderName::from_static("x-oz-dev-id"),
             http::HeaderName::from_static("x-oz-user-id"),
-        ])
+        ]);
         // 允许携带认证信息
-        .allow_credentials(true);
+        // .allow_credentials(true);
 
     Router::new()
         .route("/api/roles", get(get_roles))
         .route("/api/role/switch", post(switch_role))
         .route("/health", get(health_check))
+        .route("/chat", post(chat::chat))
         .route_layer(middleware::from_fn(auth::auth))
         .layer(cors)
         .with_state(app_state)

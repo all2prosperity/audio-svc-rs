@@ -23,12 +23,15 @@ use crate::constant::*;
 use axum::{
     extract::{Extension, Request},
     http,
+    Json,
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
     Router,
 };
+
+use crate::json::chat::ChatRequest;
 
 pub struct Chat {
     user_id: String,
@@ -186,9 +189,6 @@ impl Chat {
     }
 }
 
-pub async fn chat(
-    mut req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    Err(StatusCode::NOT_FOUND)
+pub async fn chat(Json(request): Json<ChatRequest>) {
+    println!("{}", serde_json::to_string(&request).unwrap());
 }
