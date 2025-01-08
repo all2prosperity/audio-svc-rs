@@ -19,9 +19,12 @@ use std::time::SystemTime;
 use async_openai::types::ChatCompletionRequestMessage;
 use crate::models::session::Session;
 use crate::constant::*;
+use crate::json::chat::ChatResponse;
+use crate::structures::app_state::AppState;
+
 
 use axum::{
-    extract::{Extension, Request},
+    extract::{Extension, Request, State},
     http,
     Json,
     http::StatusCode,
@@ -33,22 +36,24 @@ use axum::{
 
 use crate::json::chat::ChatRequest;
 
-pub struct Chat {
+pub struct Chat<'a> {
     user_id: String,
     session_id: String,
     role_id: String,
+    app_state: &'a mut AppState,
 }
 
-impl Chat {
-    pub fn new(user_id: String, session_id: String, role_id: String) -> Self {
+impl<'a> Chat<'a> {
+    pub fn new(user_id: String, session_id: String, role_id: String, app_state: &'a mut AppState) -> Self {
         Self {
             user_id,
             session_id,
             role_id,
+            app_state,
         }
     }
 
-    async fn finish_insert_session(&self, conn: &mut diesel::PgConnection) -> Result<String, Box<dyn std::error::Error>> {
+    async fn finish_insert_session(&self) -> Result<String, Box<dyn std::error::Error>> {
         let session = Session {
             session_id: self.session_id.clone(),
             user_id: self.user_id.clone(),
@@ -59,11 +64,11 @@ impl Chat {
 
         diesel::insert_into(schema::sessions::table)
             .values(&session)
-            .execute(conn)?;
+            .execute(&mut self.app_state.db_pool.get()?)?;
         Ok("".to_string())
     }
 
-    async fn finish_insert_message(&self, conn: &mut diesel::PgConnection, message: String, assistant_message: String) -> Result<String, Box<dyn std::error::Error>> {
+    async fn finish_insert_message(&self, message: String, assistant_message: String) -> Result<String, Box<dyn std::error::Error>> {
         let section = Section {
             section_id: uuid::Uuid::new_v4().to_string(),
             session_id: self.session_id.clone(),
@@ -75,19 +80,19 @@ impl Chat {
 
         diesel::insert_into(schema::sections::table)
             .values(&section)
-            .execute(conn)?;
+            .execute(&mut self.app_state.db_pool.get()?)?;
         Ok("".to_string())
     }
 
-    async fn fill_message_by_session_id(&self, conn: &mut diesel::PgConnection, messages: &mut Vec<ChatCompletionRequestMessage>, session_id: String) -> Result<(), Box<dyn std::error::Error>> {
+    async fn fill_message_by_session_id(&self, messages: &mut Vec<ChatCompletionRequestMessage>, session_id: String) -> Result<(), Box<dyn std::error::Error>> {
         let sections = schema::sections::table
             .filter(schema::sections::session_id.eq(session_id))
             .order(schema::sections::created_at.desc())
             .limit(SECTION_LIMIT)
             .select(Section::as_select())
-            .load(conn)?;
+            .load(&mut self.app_state.db_pool.get()?)?;
 
-        for section in sections {
+        for section in sections.iter().rev() {
             messages.push(ChatCompletionRequestUserMessageArgs::default()
                 .content(section.user_message.clone())
                 .build()?
@@ -102,11 +107,11 @@ impl Chat {
         Ok(())
     }
 
-    async fn check_need_new_session(&self, conn: &mut diesel::PgConnection) -> Result<bool, Box<dyn std::error::Error>> {
+    async fn check_need_new_session(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let session = schema::sessions::table
             .filter(schema::sessions::session_id.eq(self.session_id.clone()))
             .select(Session::as_select())
-            .load(conn)?;
+            .load(&mut self.app_state.db_pool.get()?)?;
 
         if session.is_empty() {
             return Ok(true);
@@ -119,10 +124,11 @@ impl Chat {
 
         Ok(false)
     }
+}
 
-    pub async fn on_recv_message(&mut self, message: String) -> Result<String, Box<dyn std::error::Error>> {
+impl<'a> Chat<'a> {
+    pub async fn on_recv_message(&mut self, message: String) -> Result<ChatResponse, Box<dyn std::error::Error>> {
         println!("recv message: {}", message);
-        let conn = &mut establish_connection();
 
         let mut is_first = false;
         if self.session_id == "" {
@@ -130,7 +136,7 @@ impl Chat {
             is_first = true;
         }
         else {
-            if self.check_need_new_session(conn).await? {
+            if self.check_need_new_session().await? {
                 self.session_id = uuid::Uuid::new_v4().to_string();
                 is_first = true;
             }
@@ -140,7 +146,7 @@ impl Chat {
             .filter(dsl::id.eq(self.role_id.clone()))
             .limit(1)
             .select(role::Role::as_select())
-            .load(conn)?;
+            .load(&mut self.app_state.db_pool.get()?)?;
 
         let role = results.first().ok_or(Box::new(std::io::Error::new(std::io::ErrorKind::NotFound, "Role not found")))?;
 
@@ -157,7 +163,7 @@ impl Chat {
             .into());
 
         if !is_first {
-            self.fill_message_by_session_id(conn, &mut messages, self.session_id.clone()).await;
+            self.fill_message_by_session_id(&mut messages, self.session_id.clone()).await;
         }
 
         messages.push(ChatCompletionRequestUserMessageArgs::default()
@@ -171,7 +177,7 @@ impl Chat {
             .messages(messages)
             .build()?;
 
-        println!("{}", serde_json::to_string(&request).unwrap());
+        println!("{}\n\n", serde_json::to_string(&request).unwrap());
 
         let response = client.chat().create(request).await?;
 
@@ -180,15 +186,30 @@ impl Chat {
         let openai_response = serde_json::from_str::<OpenAIResponse>(&serde_json::to_string(&response).unwrap()).unwrap();
 
         if is_first {
-            self.finish_insert_session(conn).await;
+            self.finish_insert_session().await;
         }
 
-        self.finish_insert_message(conn, message, openai_response.choices[0].message.content.clone()).await;
+        self.finish_insert_message(message, openai_response.choices[0].message.content.clone()).await;
 
-        Ok("".to_string())
+        Ok(ChatResponse {
+            message: openai_response.choices[0].message.content.clone(),
+            session_id: self.session_id.clone(),
+            role_id: self.role_id.clone(),
+        })
     }
 }
 
-pub async fn chat(Json(request): Json<ChatRequest>) {
+pub async fn chat(State(mut app_state): State<AppState>, Json(request): Json<ChatRequest>) -> impl IntoResponse {
     println!("{}", serde_json::to_string(&request).unwrap());
+    let mut chat = Chat::new(request.user_id, request.session_id, request.role_id, &mut app_state);
+    if let Ok(response) = chat.on_recv_message(request.message).await {
+        return Json(response).into_response();
+    }
+    else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+}
+
+pub async fn chat_history() {
+    println!("hello");
 }
