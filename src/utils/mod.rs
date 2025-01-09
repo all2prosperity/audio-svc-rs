@@ -23,3 +23,8 @@ pub fn insert_default_role() {
         .returning(Role::as_returning())
         .get_result(conn);
 }
+
+
+pub fn genNewId() -> String {
+    uuid::Uuid::new_v4().to_string()
+}

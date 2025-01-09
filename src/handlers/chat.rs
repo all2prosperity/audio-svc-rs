@@ -20,21 +20,23 @@ use async_openai::types::ChatCompletionRequestMessage;
 use crate::models::session::Session;
 use crate::constant::*;
 use crate::json::chat::ChatResponse;
+use crate::json::chat_history_response::{ChatHistoryResponse, History, Payload};
 use crate::structures::app_state::AppState;
-
+use crate::structures::app_error::AppError;
+use crate::utils;
 
 use axum::{
-    extract::{Extension, Request, State},
+    extract::{Extension, Request, State, Query},
     http,
     Json,
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
     Router,
 };
 
-use crate::json::chat::ChatRequest;
+use crate::json::chat::{ChatRequest, ChatHistoryRequest};
 
 pub struct Chat<'a> {
     user_id: String,
@@ -54,6 +56,7 @@ impl<'a> Chat<'a> {
     }
 
     async fn finish_insert_session(&self) -> Result<String, Box<dyn std::error::Error>> {
+        println!("finish_insert_session {:?}", self.user_id);
         let session = Session {
             session_id: self.session_id.clone(),
             user_id: self.user_id.clone(),
@@ -70,7 +73,7 @@ impl<'a> Chat<'a> {
 
     async fn finish_insert_message(&self, message: String, assistant_message: String) -> Result<String, Box<dyn std::error::Error>> {
         let section = Section {
-            section_id: uuid::Uuid::new_v4().to_string(),
+            section_id: utils::genNewId(),
             session_id: self.session_id.clone(),
             user_message: message,
             assistant_message: assistant_message,
@@ -132,12 +135,12 @@ impl<'a> Chat<'a> {
 
         let mut is_first = false;
         if self.session_id == "" {
-            self.session_id = uuid::Uuid::new_v4().to_string();
+            self.session_id = utils::genNewId();
             is_first = true;
         }
         else {
             if self.check_need_new_session().await? {
-                self.session_id = uuid::Uuid::new_v4().to_string();
+                self.session_id = utils::genNewId();
                 is_first = true;
             }
         }
@@ -197,10 +200,40 @@ impl<'a> Chat<'a> {
             role_id: self.role_id.clone(),
         })
     }
+
+    pub async fn get_chat_history(&self, page: i64, page_size: i64) -> Result<ChatHistoryResponse, Box<dyn std::error::Error>> {
+        let sessions = schema::sessions::table
+            .filter(schema::sessions::user_id.eq(self.user_id.clone()))
+            .order(schema::sessions::updated_at.desc())
+            .limit(page_size)
+            .offset(page * page_size)
+            .select(Session::as_select())
+            .load(&mut self.app_state.db_pool.get()?)?;
+
+        let mut history = Vec::new();
+        let total = sessions.len() as i64;
+        for session in sessions {
+            history.push(History {
+                chat_id: session.session_id.clone(),
+                title: session.role_id.clone(),
+                role_name: session.role_id.clone(),
+            });
+        }
+
+        Ok(ChatHistoryResponse {
+            code: 0,
+            msg: "".to_string(),
+            payload: Payload {
+                history,
+                page,
+                total,
+            },
+        })
+    }
 }
 
-pub async fn chat(State(mut app_state): State<AppState>, Json(request): Json<ChatRequest>) -> impl IntoResponse {
-    println!("{}", serde_json::to_string(&request).unwrap());
+pub async fn chat(State(mut app_state): State<AppState>, headers: HeaderMap, Json(request): Json<ChatRequest>) -> impl IntoResponse {
+    println!("{}, {:?}", serde_json::to_string(&request).unwrap(), headers);
     let mut chat = Chat::new(request.user_id, request.session_id, request.role_id, &mut app_state);
     if let Ok(response) = chat.on_recv_message(request.message).await {
         return Json(response).into_response();
@@ -210,6 +243,19 @@ pub async fn chat(State(mut app_state): State<AppState>, Json(request): Json<Cha
     }
 }
 
-pub async fn chat_history() {
-    println!("hello");
+
+pub async fn chat_history(mut app_state: State<AppState>, Query(query): Query<ChatHistoryRequest>, headers: HeaderMap) -> Result<impl IntoResponse, AppError> {
+    println!("hello {:?}, {:?}", query, headers);
+    let user_id = headers
+        .get("x-oz-user-id")
+        .ok_or(AppError(anyhow::anyhow!("User id not found")))?
+        .to_str()
+        .unwrap_or("");
+    let chat = Chat::new(user_id.to_string(), "".to_string(), "".to_string(), &mut app_state);
+    if let Ok(response) = chat.get_chat_history(query.offset, query.limit).await {
+        return Ok(Json(response).into_response());
+    }
+    else {
+        return Err(AppError(anyhow::anyhow!("Failed to get chat history")));
+    }
 }

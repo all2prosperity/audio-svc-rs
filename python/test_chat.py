@@ -9,9 +9,9 @@ def main():
         "Authorization": "Bearer 1234567890",
     }
     ret = requests.post("http://localhost:3000/api/chat", json={
-        "message": "7",
-        "session_id": "45757394-2edc-49a8-9e47-f6881a5d41fe",
-        "user_id": "1",
+        "message": "1",
+        "session_id": "",
+        "user_id": "2",
         "role_id": "1"
     }, headers=headers)
     print(ret.text)

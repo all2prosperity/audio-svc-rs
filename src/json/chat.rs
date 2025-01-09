@@ -14,3 +14,9 @@ pub struct ChatResponse {
     pub session_id: String,
     pub role_id: String,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChatHistoryRequest {
+    pub offset: i64,
+    pub limit: i64,
+}
