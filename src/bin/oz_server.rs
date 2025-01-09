@@ -41,6 +41,7 @@ async fn setup_router(app_state: AppState) -> Router {
         .route("/health", get(health_check))
         .route("/api/chat", post(chat::chat))
         .route("/api/chat/history", get(chat::chat_history))
+        .route("/api/chat/session_history", post(chat::chat_session_history))
         .route_layer(middleware::from_fn(auth::auth))
         .layer(cors)
         .with_state(app_state)

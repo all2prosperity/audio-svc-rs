@@ -21,6 +21,7 @@ use crate::models::session::Session;
 use crate::constant::*;
 use crate::json::chat::ChatResponse;
 use crate::json::chat_history_response::{ChatHistoryResponse, History, Payload};
+use crate::json::chat_session_history::{ChatSessionHistoryResponse, History as ChatSessionHistoryHistory, ChatSessionHistoryRequest};
 use crate::structures::app_state::AppState;
 use crate::structures::app_error::AppError;
 use crate::utils;
@@ -230,6 +231,35 @@ impl<'a> Chat<'a> {
             },
         })
     }
+
+    pub async fn get_chat_session_history(&self, page: i64, page_size: i64) -> Result<ChatSessionHistoryResponse, Box<dyn std::error::Error>> {
+        let sections = schema::sections::table
+            .filter(schema::sections::session_id.eq(self.session_id.clone()))
+            .order(schema::sections::updated_at.desc())
+            .limit(page_size)
+            .offset(page * page_size)
+            .select(Section::as_select())
+            .load(&mut self.app_state.db_pool.get()?)?;
+
+        let mut history = Vec::new();
+        let total = sections.len() as i64;
+        for section in sections {
+            history.push(ChatSessionHistoryHistory {
+                id: section.section_id.clone(),
+                user: section.user_message.clone(),
+                assistant: section.assistant_message.clone(),
+            });
+        }
+
+        Ok(ChatSessionHistoryResponse {
+            code: 0,
+            msg: "".to_string(),
+            history,
+            page,
+            limit: page_size,
+            total,
+        })
+    }
 }
 
 pub async fn chat(State(mut app_state): State<AppState>, headers: HeaderMap, Json(request): Json<ChatRequest>) -> impl IntoResponse {
@@ -259,3 +289,21 @@ pub async fn chat_history(mut app_state: State<AppState>, Query(query): Query<Ch
         return Err(AppError(anyhow::anyhow!("Failed to get chat history")));
     }
 }
+
+pub async fn chat_session_history(mut app_state: State<AppState>, headers: HeaderMap, Json(request): Json<ChatSessionHistoryRequest>) -> Result<impl IntoResponse, AppError> {
+    println!("hello {:?}, {:?}", request, headers);
+    let user_id = headers
+        .get("x-oz-user-id")
+        .ok_or(AppError(anyhow::anyhow!("User id not found")))?
+        .to_str()
+        .unwrap_or("");
+
+    let chat = Chat::new(user_id.to_string(), request.chat_id, "".to_string(), &mut app_state);
+    if let Ok(response) = chat.get_chat_session_history(request.offset, request.limit).await {
+        return Ok(Json(response).into_response());
+    }
+    else {
+        return Err(AppError(anyhow::anyhow!("Failed to get chat session history")));
+    }
+}
+
