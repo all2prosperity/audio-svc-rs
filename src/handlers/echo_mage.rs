@@ -3,9 +3,18 @@ use axum::{
     response::Response,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+use llm_audio_toolkit::asr::{volc::VolcanoConfig, volc::VolcanoEchoMage, EchoMage};
+use llm_audio_toolkit::tts::volc::{VolcConfig as TTSConfig, VolcWsTTS};
+use llm_audio_toolkit::tts::SpellCaster;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info};
+
+use crate::handlers::chat::Chat;
+
+const START_SESSION_MSG: &str = "start_session";
+const AUDIO_INPUT_CHUNK_MSG: &str = "audio_input_chunk";
+const AUDIO_INPUT_FINISH_MSG: &str = "audio_input_finish";
 
 // 定义会话开始的请求结构
 #[derive(Debug, Deserialize)]
@@ -33,6 +42,8 @@ pub async fn ws_handler(ws: WebSocketUpgrade) -> Response {
 // 处理 WebSocket 连接
 async fn handle_socket(mut socket: WebSocket) {
     let mut session_started = false;
+    let mut asr: Option<VolcanoEchoMage> = None;
+    let mut audio_buffer = Vec::new();
 
     while let Some(msg) = socket.recv().await {
         let msg = match msg {
@@ -43,7 +54,6 @@ async fn handle_socket(mut socket: WebSocket) {
             }
         };
 
-        // 处理接收到的消息
         if let Message::Text(text) = msg {
             let ws_msg: WebSocketMessage = match serde_json::from_str(&text) {
                 Ok(msg) => msg,
@@ -54,48 +64,151 @@ async fn handle_socket(mut socket: WebSocket) {
             };
 
             match ws_msg.msg_type.as_str() {
-                "start_session" => {
-                    if let Ok(payload) = serde_json::from_value::<StartSessionPayload>(ws_msg.payload) {
+                START_SESSION_MSG => {
+                    if let Ok(payload) =
+                        serde_json::from_value::<StartSessionPayload>(ws_msg.payload)
+                    {
                         info!("Starting session: {:?}", payload);
+
+                        // 初始化 VolcanoEchoMage
+                        let config = VolcanoConfig {
+                            app_id: "YOUR_APP_ID".to_string(),
+                            token: "YOUR_TOKEN".to_string(),
+                            cluster: "volcengine_streaming_common".to_string(),
+                            audio_format: "raw".to_string(),
+                            codec: "raw".to_string(),
+                            workflow: "audio_in,resample,partition,vad,fe,decode".to_string(),
+                            sample_rate: payload.sample_rate,
+                        };
+
+                        let mut volcano_asr = VolcanoEchoMage::new(config);
+                        if let Err(e) = volcano_asr.start().await {
+                            error!("Failed to start ASR: {}", e);
+                            break;
+                        }
+
+                        asr = Some(volcano_asr);
                         session_started = true;
+
                         let started = json!({
                             "type": "session_started"
                         });
-                        
-                        // 发送会话开始确认
-                        if let Err(e) = socket.send(Message::Text(started.to_string().into())).await {
+
+                        if let Err(e) = socket.send(Message::Text(started.to_string().into())).await
+                        {
                             error!("Failed to send session_started: {}", e);
                             break;
                         }
                     }
                 }
-                "audio_input_chunk" => {
+                AUDIO_INPUT_CHUNK_MSG => {
                     if !session_started {
                         error!("Received audio chunk before session start");
                         continue;
                     }
 
-                    // 处理音频数据
                     if let Value::String(audio_data) = ws_msg.payload {
-                        // 这里可以添加音频处理逻辑
-                        // 示例：简单地回显相同的音频数据
-                        if let Err(e) = socket.send(Message::Text(json!({
-                            "type": "audio_output_chunk",
-                            "payload": audio_data
-                        }).to_string().into())).await {
-                            error!("Failed to send audio output: {}", e);
-                            break;
+                        if let Ok(decoded) = BASE64.decode(audio_data.as_bytes()) {
+                            if let Some(asr) = &mut asr {
+                                if let Err(e) = asr.send_audio(&decoded).await {
+                                    error!("Failed to send audio to ASR: {}", e);
+                                    continue;
+                                }
+                                audio_buffer.extend_from_slice(&decoded);
+                            }
                         }
                     }
                 }
-                "audio_input_finish" => {
-                    // 发送处理完成信号
-                    if let Err(e) = socket.send(Message::Text(json!({
-                        "type": "audio_output_finished"
-                    }).to_string().into())).await {
-                        error!("Failed to send finish signal: {}", e);
+                AUDIO_INPUT_FINISH_MSG => {
+                    if let Some(asr) = &mut asr {
+                        match asr.receive_result().await {
+                            Ok(text) => {
+                                info!("ASR Result: {}", text);
+
+                                // 创建Chat实例并处理文本
+                                let mut chat = Chat::new(
+                                    "default_user".to_string(),
+                                    "".to_string(),
+                                    "default_role".to_string(),
+                                );
+
+                                match chat.on_recv_message(text).await {
+                                    Ok(receiver) => {
+                                        // 创建TTS配置
+                                        let tts_config = TTSConfig {
+                                            app_id: "YOUR_APP_ID".to_string(),
+                                            token: "YOUR_TOKEN".to_string(),
+                                            cluster: "volcano_tts".to_string(),
+                                            voice_type: "BV406_V2_streaming".to_string(),
+                                            enc_format: "pcm".to_string(),
+                                        };
+
+                                        // 创建TTS实例
+                                        let mut tts = VolcWsTTS::new(tts_config);
+
+                                        // 从Chat的receiver中接收消息并进行TTS转换
+                                        while let Ok(chat_response) = receiver.recv() {
+                                            if let Err(e) =
+                                                tts.init(&chat_response.split_text).await
+                                            {
+                                                error!("Failed to init TTS: {}", e);
+                                                continue;
+                                            }
+
+                                            match tts.stream_synthesize().await {
+                                                Ok(tts_receiver) => {
+                                                    // 处理TTS的音频流
+                                                    while let Ok(synth_response) =
+                                                        tts_receiver.recv()
+                                                    {
+                                                        if !synth_response.audio.is_empty() {
+                                                            // 将音频数据转换为base64
+                                                            let base64_audio = BASE64
+                                                                .encode(&synth_response.audio);
+
+                                                            // 发送音频数据到websocket客户端
+                                                            if let Err(e) = socket.send(Message::Text(json!({
+                                                                "type": "audio_output_chunk",
+                                                                "payload": base64_audio
+                                                            }).to_string().into())).await {
+                                                                error!("Failed to send audio chunk: {}", e);
+                                                                break;
+                                                            }
+                                                        }
+
+                                                        // 如果是最后一个音频块，并且是最后一条消息
+                                                        if synth_response.is_last
+                                                            && chat_response.is_end
+                                                        {
+                                                            if let Err(e) = socket
+                                                                .send(Message::Text(json!({
+                                                                    "type": "audio_output_finished"
+                                                                }).to_string().into()))
+                                                                .await
+                                                            {
+                                                                error!("Failed to send finish signal: {}", e);
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    error!("Failed to synthesize speech: {}", e);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to process chat: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to get ASR result: {}", e);
+                            }
+                        }
                     }
-                    // 等待5秒后关闭连接
+
                     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
                     break;
                 }
@@ -106,6 +219,5 @@ async fn handle_socket(mut socket: WebSocket) {
         }
     }
 
-    // 连接关闭
     info!("WebSocket connection closed");
 }
