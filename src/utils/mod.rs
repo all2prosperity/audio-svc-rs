@@ -4,7 +4,6 @@ use std::time::SystemTime;
 use crate::models::schema;
 use diesel::SelectableHelper;
 use diesel::RunQueryDsl;
-use std::iter::Iterator;
 
 
 pub fn insert_default_role() {

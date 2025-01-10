@@ -1,5 +1,5 @@
 use crate::models::schema::roles::dsl;
-use crate::models::{establish_connection, role};
+use crate::models::role;
 use async_openai::{
     types::{
         ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestSystemMessageArgs,
@@ -7,7 +7,6 @@ use async_openai::{
     },
     Client, config,
 };
-use axum::http::header;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;
@@ -29,14 +28,10 @@ use crate::structures::app_error::AppError;
 use crate::utils;
 
 use axum::{
-    extract::{Extension, Request, State, Query},
-    http,
+    extract::{State, Query},
     Json,
     http::{StatusCode, HeaderMap},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
+    response::IntoResponse,
 };
 
 use crate::json::chat::{ChatRequest, ChatHistoryRequest};
