@@ -28,7 +28,6 @@ use async_openai::{
     },
     Client,
 };
-use axum::http::header;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;

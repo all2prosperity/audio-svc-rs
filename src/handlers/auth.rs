@@ -1,11 +1,8 @@
 use axum::{
     extract::{Extension, Request},
-    http,
     http::StatusCode,
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::get,
-    Router,
+    middleware::{Next},
+    response::Response,
 };
 
 use crate::structures::user::CurrentUser;
