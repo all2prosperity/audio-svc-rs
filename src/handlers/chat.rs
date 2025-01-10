@@ -7,6 +7,7 @@ use async_openai::{
     },
     Client, config,
 };
+use axum::http::header;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;
@@ -22,6 +23,7 @@ use crate::constant::*;
 use crate::json::chat::ChatResponse;
 use crate::json::chat_history_response::{ChatHistoryResponse, History, Payload};
 use crate::json::chat_session_history::{ChatSessionHistoryResponse, History as ChatSessionHistoryHistory, ChatSessionHistoryRequest};
+use crate::json::role::AddRoleRequest;
 use crate::structures::app_state::AppState;
 use crate::structures::app_error::AppError;
 use crate::utils;
@@ -260,6 +262,22 @@ impl<'a> Chat<'a> {
             total,
         })
     }
+
+    pub async fn add_role(&self, name: String, prompt: String) -> Result<(), Box<dyn std::error::Error>> {
+        let role = role::Role {
+            id: utils::genNewId(),
+            name,
+            prompt,
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
+        };
+
+        diesel::insert_into(schema::roles::table)
+            .values(&role)
+            .execute(&mut self.app_state.db_pool.get()?)?;
+
+        Ok(())
+    }
 }
 
 pub async fn chat(State(mut app_state): State<AppState>, headers: HeaderMap, Json(request): Json<ChatRequest>) -> impl IntoResponse {
@@ -305,5 +323,18 @@ pub async fn chat_session_history(mut app_state: State<AppState>, headers: Heade
     else {
         return Err(AppError(anyhow::anyhow!("Failed to get chat session history")));
     }
+}
+
+pub async fn add_role(State(mut app_state): State<AppState>, header: HeaderMap, Json(request): Json<AddRoleRequest>) -> Result<impl IntoResponse, AppError> {
+    let user_id = header
+        .get("x-oz-user-id")
+        .ok_or(AppError(anyhow::anyhow!("User id not found")))?
+        .to_str()
+        .unwrap_or("");
+
+    let chat = Chat::new(user_id.to_string(), "".to_string(), "".to_string(), &mut app_state);
+    chat.add_role(request.name, request.prompt).await;
+
+    Ok(StatusCode::OK.into_response())
 }
 
