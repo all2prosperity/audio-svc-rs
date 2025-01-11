@@ -42,7 +42,9 @@ use axum::{
 };
 
 use crossbeam::channel::{Receiver, Sender};
+use regex::Regex;
 
+#[derive(Debug)]
 pub struct ChatResponse {
     pub split_text: String,
     pub is_end: bool,
@@ -159,6 +161,22 @@ impl<'a> Chat<'a> {
 
         Ok(false)
     }
+
+}
+
+async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
+    let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
+    let split_text = re.split(&message).collect::<Vec<&str>>();
+    for text in split_text {
+        sender.send(ChatResponse {
+            split_text: text.to_string(),
+            is_end: false,
+        });
+    }
+    sender.send(ChatResponse {
+        split_text: "".to_string(),
+        is_end: true,
+    });
 }
 
 impl<'a> Chat<'a> {
@@ -238,6 +256,10 @@ impl<'a> Chat<'a> {
         self.finish_insert_message(message, openai_response.choices[0].message.content.clone())
             .await;
 
+        let content = openai_response.choices[0].message.content.clone();
+        tokio::spawn(async move {
+            send_split_message(content, sender).await;
+        });
         Ok(receiver)
     }
 
