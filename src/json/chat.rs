@@ -9,7 +9,7 @@ pub struct ChatRequest {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ChatResponse {
+pub struct JsonChatResponse {
     pub message: String,
     pub session_id: String,
     pub role_id: String,

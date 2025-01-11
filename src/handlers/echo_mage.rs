@@ -1,5 +1,6 @@
 use axum::{
-    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::{ws::Message, ws::WebSocket, ws::WebSocketUpgrade},
+    extract::{Json, State},
     response::Response,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info};
 
-use crate::handlers::chat::Chat;
+use crate::{handlers::chat::Chat, structures::AppState};
 
 const START_SESSION_MSG: &str = "start_session";
 const AUDIO_INPUT_CHUNK_MSG: &str = "audio_input_chunk";
@@ -35,12 +36,12 @@ struct WebSocketMessage {
 }
 
 // WebSocket upgrade handler
-pub async fn ws_handler(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(handle_socket)
+pub async fn ws_handler(ws: WebSocketUpgrade, State(mut app_state): State<AppState>) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, app_state))
 }
 
 // 处理 WebSocket 连接
-async fn handle_socket(mut socket: WebSocket) {
+async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
     let mut session_started = false;
     let mut asr: Option<VolcanoEchoMage> = None;
     let mut audio_buffer = Vec::new();
@@ -130,6 +131,7 @@ async fn handle_socket(mut socket: WebSocket) {
                                     "default_user".to_string(),
                                     "".to_string(),
                                     "default_role".to_string(),
+                                    &mut app_state,
                                 );
 
                                 match chat.on_recv_message(text).await {

@@ -1,7 +1,6 @@
 use crate::config::OZ_SERVER_CONFIG;
 use crate::constant::*;
 use crate::constant::*;
-use crate::json::chat::ChatResponse;
 use crate::json::chat_history_response::{ChatHistoryResponse, History, Payload};
 use crate::json::chat_session_history::{
     ChatSessionHistoryRequest, ChatSessionHistoryResponse, History as ChatSessionHistoryHistory,
@@ -12,13 +11,11 @@ use crate::models::schema;
 use crate::models::schema::roles::dsl;
 use crate::models::section::Section;
 use crate::models::session::Session;
-use crate::models::session::Session;
 use crate::models::{establish_connection, role};
 use crate::structures::app_error::AppError;
 use crate::structures::app_state::AppState;
 use crate::utils;
 use anyhow::Result;
-use async_openai::types::ChatCompletionRequestMessage;
 use async_openai::types::ChatCompletionRequestMessage;
 use async_openai::{
     config,
@@ -41,7 +38,7 @@ use axum::{
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::get,
-    Json, Json, Router,
+    Json, Router,
 };
 
 use crossbeam::channel::{Receiver, Sender};
@@ -75,7 +72,7 @@ impl<'a> Chat<'a> {
         }
     }
 
-    async fn finish_insert_session(&self) -> Result<String, Box<dyn std::error::Error>> {
+    async fn finish_insert_session(&self) -> Result<String> {
         println!("finish_insert_session {:?}", self.user_id);
         let session = Session {
             session_id: self.session_id.clone(),
@@ -95,7 +92,7 @@ impl<'a> Chat<'a> {
         &self,
         message: String,
         assistant_message: String,
-    ) -> Result<String, Box<dyn std::error::Error>> {
+    ) -> Result<String> {
         let section = Section {
             section_id: utils::genNewId(),
             session_id: self.session_id.clone(),
@@ -115,7 +112,7 @@ impl<'a> Chat<'a> {
         &self,
         messages: &mut Vec<ChatCompletionRequestMessage>,
         session_id: String,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<()> {
         let sections = schema::sections::table
             .filter(schema::sections::session_id.eq(session_id))
             .order(schema::sections::created_at.desc())
@@ -142,7 +139,7 @@ impl<'a> Chat<'a> {
         Ok(())
     }
 
-    async fn check_need_new_session(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    async fn check_need_new_session(&self) -> Result<bool> {
         let session = schema::sessions::table
             .filter(schema::sessions::session_id.eq(self.session_id.clone()))
             .select(Session::as_select())
@@ -165,11 +162,10 @@ impl<'a> Chat<'a> {
 }
 
 impl<'a> Chat<'a> {
-    pub async fn on_recv_message(
-        &mut self,
-        message: String,
-    ) -> Result<ChatResponse, Box<dyn std::error::Error>> {
+    pub async fn on_recv_message(&mut self, message: String) -> Result<Receiver<ChatResponse>> {
         println!("recv message: {}", message);
+
+        let (sender, receiver) = crossbeam::channel::unbounded();
 
         let mut is_first = false;
         if self.session_id == "" {
@@ -242,11 +238,7 @@ impl<'a> Chat<'a> {
         self.finish_insert_message(message, openai_response.choices[0].message.content.clone())
             .await;
 
-        Ok(ChatResponse {
-            message: openai_response.choices[0].message.content.clone(),
-            session_id: self.session_id.clone(),
-            role_id: self.role_id.clone(),
-        })
+        Ok(receiver)
     }
 
     pub async fn get_chat_history(
@@ -337,28 +329,30 @@ impl<'a> Chat<'a> {
     }
 }
 
-pub async fn chat(
-    State(mut app_state): State<AppState>,
-    headers: HeaderMap,
-    Json(request): Json<ChatRequest>,
-) -> impl IntoResponse {
-    println!(
-        "{}, {:?}",
-        serde_json::to_string(&request).unwrap(),
-        headers
-    );
-    let mut chat = Chat::new(
-        request.user_id,
-        request.session_id,
-        request.role_id,
-        &mut app_state,
-    );
-    if let Ok(response) = chat.on_recv_message(request.message).await {
-        return Json(response).into_response();
-    } else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
-}
+//目前不需要这个handler
+// pub async fn chat(
+//     State(mut app_state): State<AppState>,
+//     headers: HeaderMap,
+//     Json(request): Json<ChatRequest>,
+// ) -> impl IntoResponse {
+//     println!(
+//         "{}, {:?}",
+//         serde_json::to_string(&request).unwrap(),
+//         headers
+//     );
+    
+//     // let mut chat = Chat::new(
+//     //     request.user_id,
+//     //     request.session_id,
+//     //     request.role_id,
+//     //     &mut app_state,
+//     // );
+//     // if let Ok(response) = chat.on_recv_message(request.message).await {
+//     //     return Json(response).into_response();
+//     // } else {
+//     //     return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+//     // }
+// }
 
 pub async fn chat_history(
     mut app_state: State<AppState>,
