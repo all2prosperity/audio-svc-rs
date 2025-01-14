@@ -11,6 +11,8 @@ pub fn insert_default_role() {
 
     let role = Role {
         id: "1".to_string(),
+        is_default: true,
+        created_by: "".to_string(),
         name: "default".to_string(),
         prompt: "你是一个炉石传说高手，我会问你炉石传说相关问题".to_string(),
         picture_url: "".to_string(),
@@ -31,5 +33,5 @@ pub fn insert_default_role() {
 }
 
 pub fn genNewId() -> String {
-    uuid::Uuid::new_v4().to_string()
+    xid::new().to_string()
 }

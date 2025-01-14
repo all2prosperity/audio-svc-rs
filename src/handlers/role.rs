@@ -108,6 +108,8 @@ pub async fn create_role(
     // 创建新角色
     let role = Role {
         id: xid::new().to_string(),
+        is_default: false,
+        created_by: user.user_id,
         name: payload.name,
         picture_url: "".to_string(),
         voice_id: payload.voice_id,
@@ -125,6 +127,7 @@ pub async fn create_role(
         Ok(_) => {
             let response_payload = CreateRolePayload {
                 id: role.id,
+                created_by: role.created_by,
                 name: role.name,
                 desc: payload.desc,
                 prompt: role.prompt,

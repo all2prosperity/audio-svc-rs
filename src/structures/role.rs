@@ -68,12 +68,11 @@ impl CommonResponse {
     }
 }
 
-
 #[derive(Deserialize)]
 pub struct CreateRoleRequest {
     pub name: String,
     pub desc: String,
-    pub prompt: String, 
+    pub prompt: String,
     pub my_story: String,
     pub voice_id: String,
     pub preference: String,
@@ -82,10 +81,11 @@ pub struct CreateRoleRequest {
 #[derive(Serialize)]
 pub struct CreateRolePayload {
     pub id: String,
+    pub created_by: String,
     pub name: String,
     pub desc: String,
     pub prompt: String,
-    pub my_story: String, 
+    pub my_story: String,
     pub voice_id: String,
     pub preference: String,
 }

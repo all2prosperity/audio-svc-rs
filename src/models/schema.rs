@@ -3,6 +3,8 @@
 diesel::table! {
     roles (id) {
         id -> Varchar,
+        created_by -> Varchar,
+        is_default -> Bool,
         name -> Text,
         picture_url -> Text,
         voice_id -> Text,
@@ -51,10 +53,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    roles,
-    sections,
-    sessions,
-    user_role,
-    users,
-);
+diesel::allow_tables_to_appear_in_same_query!(roles, sections, sessions, user_role, users,);

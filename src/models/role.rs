@@ -9,6 +9,8 @@ use diesel::prelude::*;
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
     pub id: String,
+    pub is_default: bool,
+    pub created_by: String,
     pub name: String,
     pub picture_url: String,
     pub voice_id: String,

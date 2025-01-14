@@ -337,6 +337,8 @@ impl<'a> Chat<'a> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let role = role::Role {
             id: utils::genNewId(),
+            is_default: false,
+            created_by: self.user_id.clone(),
             name,
             picture_url: "".to_string(),
             voice_id: "".to_string(),
