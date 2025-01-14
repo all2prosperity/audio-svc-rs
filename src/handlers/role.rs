@@ -5,7 +5,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Extension,
 };
-use diesel::SelectableHelper as _;
+use diesel::{associations::HasTable, SelectableHelper as _};
 
 use crate::models::{
     role::Role,
@@ -18,6 +18,9 @@ use crate::{
     structures::{CreateRolePayload, CreateRoleRequest, CreateRoleResponse},
 };
 use diesel::prelude::*;
+use diesel::QueryDsl;
+use diesel::RunQueryDsl;
+use diesel::SelectableHelper;
 
 const DEVICE_ID_HEADER: &str = "X-OZ-Device-ID";
 
@@ -36,11 +39,19 @@ pub async fn get_roles(
         .db_pool
         .get()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let results = roles
+    let mut results = schema::roles::table
+        .filter(schema::roles::is_default.eq(true))
         .select(Role::as_select())
         .load(conn)
         .expect("Error loading roles");
+
+    let self_created_roles = schema::roles::table
+        .filter(schema::roles::created_by.eq(user.user_id))
+        .select(Role::as_select())
+        .load(conn)
+        .expect("Error loading roles");
+
+    results.extend(self_created_roles);
 
     let resp_roles = results
         .iter()
