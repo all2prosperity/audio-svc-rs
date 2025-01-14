@@ -10,6 +10,9 @@ use diesel::prelude::*;
 pub struct Role {
     pub id: String,
     pub name: String,
+    pub picture_url: String,
+    pub voice_id: String,
+    pub audition_url: String,
     pub prompt: String,
     pub created_at: SystemTime,
     pub updated_at: SystemTime,

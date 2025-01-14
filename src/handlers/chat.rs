@@ -338,6 +338,9 @@ impl<'a> Chat<'a> {
         let role = role::Role {
             id: utils::genNewId(),
             name,
+            picture_url: "".to_string(),
+            voice_id: "".to_string(),
+            audition_url: "".to_string(),
             prompt,
             created_at: SystemTime::now(),
             updated_at: SystemTime::now(),

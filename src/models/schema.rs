@@ -4,6 +4,9 @@ diesel::table! {
     roles (id) {
         id -> Varchar,
         name -> Text,
+        picture_url -> Text,
+        voice_id -> Text,
+        audition_url -> Text,
         prompt -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,

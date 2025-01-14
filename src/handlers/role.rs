@@ -40,6 +40,8 @@ pub async fn get_roles(
             id: r.id.clone(),
             name: r.name.clone(),
             picture_url: "http://example.com/pig.jpg".to_string(),
+            voice_id: r.voice_id.clone(),
+            audition_url: r.audition_url.clone(),
         })
         .collect();
 

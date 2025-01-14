@@ -1,10 +1,10 @@
-use crate::models::role::Role;
 use crate::models::establish_connection;
-use std::time::SystemTime;
+use crate::models::role::Role;
 use crate::models::schema;
-use diesel::SelectableHelper;
 use diesel::RunQueryDsl;
-
+use diesel::SelectableHelper;
+use log::{error, info};
+use std::time::SystemTime;
 
 pub fn insert_default_role() {
     let conn = &mut establish_connection();
@@ -13,16 +13,22 @@ pub fn insert_default_role() {
         id: "1".to_string(),
         name: "default".to_string(),
         prompt: "你是一个炉石传说高手，我会问你炉石传说相关问题".to_string(),
+        picture_url: "".to_string(),
+        voice_id: "".to_string(),
+        audition_url: "".to_string(),
         created_at: SystemTime::now(),
         updated_at: SystemTime::now(),
     };
 
-    diesel::insert_into(schema::roles::table)
+    match diesel::insert_into(schema::roles::table)
         .values(&role)
         .returning(Role::as_returning())
-        .get_result(conn);
+        .get_result(conn)
+    {
+        Ok(_) => info!("Inserted default role"),
+        Err(e) => error!("Error inserting default role: {}", e),
+    }
 }
-
 
 pub fn genNewId() -> String {
     uuid::Uuid::new_v4().to_string()

@@ -18,6 +18,8 @@ pub struct RoleInfo {
     pub id: String,
     pub name: String,
     pub picture_url: String,
+    pub voice_id: String,
+    pub audition_url: String,
 }
 
 #[derive(Deserialize)]
