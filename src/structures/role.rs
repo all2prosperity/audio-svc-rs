@@ -67,3 +67,50 @@ impl CommonResponse {
         }
     }
 }
+
+
+#[derive(Deserialize)]
+pub struct CreateRoleRequest {
+    pub name: String,
+    pub desc: String,
+    pub prompt: String, 
+    pub my_story: String,
+    pub voice_id: String,
+    pub preference: String,
+}
+
+#[derive(Serialize)]
+pub struct CreateRolePayload {
+    pub id: String,
+    pub name: String,
+    pub desc: String,
+    pub prompt: String,
+    pub my_story: String, 
+    pub voice_id: String,
+    pub preference: String,
+}
+
+#[derive(Serialize)]
+pub struct CreateRoleResponse {
+    pub code: i32,
+    pub msg: String,
+    pub payload: Option<CreateRolePayload>,
+}
+
+impl CreateRoleResponse {
+    pub fn success(payload: CreateRolePayload) -> Self {
+        Self {
+            code: 0,
+            msg: "ok".to_string(),
+            payload: Some(payload),
+        }
+    }
+
+    pub fn error(msg: &str) -> Self {
+        Self {
+            code: -1,
+            msg: msg.to_string(),
+            payload: None,
+        }
+    }
+}

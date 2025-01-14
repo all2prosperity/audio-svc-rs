@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use axum::{
     extract::{Json, State},
     http::{HeaderMap, StatusCode},
@@ -5,10 +7,16 @@ use axum::{
 };
 use diesel::SelectableHelper as _;
 
-use crate::models::schema::roles::dsl::*;
-use crate::models::{role::Role, schema::user_role};
+use crate::models::{
+    role::Role,
+    schema::{self, user_role},
+};
 use crate::structures::user::CurrentUser;
 use crate::structures::{AppState, CommonResponse, RoleInfo, RoleResponse, SwitchRoleRequest};
+use crate::{
+    models::schema::roles::dsl::*,
+    structures::{CreateRolePayload, CreateRoleRequest, CreateRoleResponse},
+};
 use diesel::prelude::*;
 
 const DEVICE_ID_HEADER: &str = "X-OZ-Device-ID";
@@ -79,4 +87,53 @@ pub async fn switch_role(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(CommonResponse::success()))
+}
+
+pub async fn create_role(
+    State(state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
+    headers: HeaderMap,
+    Json(payload): Json<CreateRoleRequest>,
+) -> Result<Json<CreateRoleResponse>, StatusCode> {
+    // 验证 device_id
+    if !headers.contains_key(DEVICE_ID_HEADER) {
+        return Ok(Json(CreateRoleResponse::error("Missing device ID")));
+    }
+
+    let conn = &mut state
+        .db_pool
+        .get()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // 创建新角色
+    let role = Role {
+        id: xid::new().to_string(),
+        name: payload.name,
+        picture_url: "".to_string(),
+        voice_id: payload.voice_id,
+        audition_url: "".to_string(),
+        prompt: payload.prompt,
+        created_at: SystemTime::now(),
+        updated_at: SystemTime::now(),
+    };
+
+    // 插入数据库
+    match diesel::insert_into(schema::roles::table)
+        .values(&role)
+        .execute(conn)
+    {
+        Ok(_) => {
+            let response_payload = CreateRolePayload {
+                id: role.id,
+                name: role.name,
+                desc: payload.desc,
+                prompt: role.prompt,
+                my_story: payload.my_story,
+                voice_id: role.voice_id,
+                preference: payload.preference,
+            };
+            Ok(Json(CreateRoleResponse::success(response_payload)))
+        }
+        Err(_) => Ok(Json(CreateRoleResponse::error("Failed to create role"))),
+    }
 }
