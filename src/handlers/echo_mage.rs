@@ -1,7 +1,10 @@
 use axum::{
-    extract::{ws::Message, ws::WebSocket, ws::WebSocketUpgrade},
-    extract::{Json, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        Json, State,
+    },
     response::Response,
+    Extension,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use llm_audio_toolkit::asr::{volc::VolcanoConfig, volc::VolcanoEchoMage, EchoMage};
@@ -11,7 +14,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info};
 
-use crate::{handlers::chat::Chat, structures::AppState};
+use crate::{
+    handlers::chat::Chat,
+    structures::{user::CurrentUser, AppState},
+};
 
 const START_SESSION_MSG: &str = "start_session";
 const AUDIO_INPUT_CHUNK_MSG: &str = "audio_input_chunk";
@@ -36,15 +42,20 @@ struct WebSocketMessage {
 }
 
 // WebSocket upgrade handler
-pub async fn ws_handler(ws: WebSocketUpgrade, State(mut app_state): State<AppState>) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, app_state))
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(mut app_state): State<AppState>,
+    Extension(user): Extension<CurrentUser>,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_socket(socket, app_state, user))
 }
 
 // 处理 WebSocket 连接
-async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
+async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: CurrentUser) {
     let mut session_started = false;
     let mut asr: Option<VolcanoEchoMage> = None;
-    let mut audio_buffer = Vec::new();
+    let mut role_id: Option<String> = None;
+    //let mut audio_buffer = Vec::new();
 
     while let Some(msg) = socket.recv().await {
         let msg = match msg {
@@ -73,8 +84,8 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
 
                         // 初始化 VolcanoEchoMage
                         let config = VolcanoConfig {
-                            app_id: "YOUR_APP_ID".to_string(),
-                            token: "YOUR_TOKEN".to_string(),
+                            app_id: "7900512007".to_string(),
+                            token: "y3uH1UFivyu4q6gKnwKKIA3snC3FXiXb".to_string(),
                             cluster: "volcengine_streaming_common".to_string(),
                             audio_format: "raw".to_string(),
                             codec: "raw".to_string(),
@@ -85,7 +96,18 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
                         let mut volcano_asr = VolcanoEchoMage::new(config);
                         if let Err(e) = volcano_asr.start().await {
                             error!("Failed to start ASR: {}", e);
-                            break;
+                            socket
+                                .send(Message::Text(
+                                    json!({
+                                        "code": -1,
+                                        "msg": "Failed to start ASR"
+                                    })
+                                    .to_string()
+                                    .into(),
+                                ))
+                                .await
+                                .unwrap();
+                            return;
                         }
 
                         asr = Some(volcano_asr);
@@ -100,6 +122,20 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
                             error!("Failed to send session_started: {}", e);
                             break;
                         }
+                    } else {
+                        error!("Failed to parse start_session payload");
+                        socket
+                            .send(Message::Text(
+                                json!({
+                                    "code": -1,
+                                    "msg": "Failed to parse start_session payload"
+                                })
+                                .to_string()
+                                .into(),
+                            ))
+                            .await
+                            .unwrap();
+                        return;
                     }
                 }
                 AUDIO_INPUT_CHUNK_MSG => {
@@ -115,7 +151,7 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
                                     error!("Failed to send audio to ASR: {}", e);
                                     continue;
                                 }
-                                audio_buffer.extend_from_slice(&decoded);
+                                //audio_buffer.extend_from_slice(&decoded);
                             }
                         }
                     }
@@ -130,7 +166,7 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
                                 let mut chat = Chat::new(
                                     "default_user".to_string(),
                                     "".to_string(),
-                                    "default_role".to_string(),
+                                    role_id.unwrap_or("default_role".to_string()),
                                     &mut app_state,
                                 );
 
@@ -138,10 +174,10 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState) {
                                     Ok(receiver) => {
                                         // 创建TTS配置
                                         let tts_config = TTSConfig {
-                                            app_id: "YOUR_APP_ID".to_string(),
-                                            token: "YOUR_TOKEN".to_string(),
-                                            cluster: "volcano_tts".to_string(),
-                                            voice_type: "BV406_V2_streaming".to_string(),
+                                            app_id: "7900512007".to_string(),
+                                            token: "y3uH1UFivyu4q6gKnwKKIA3snC3FXiXb".to_string(),
+                                            cluster: "volcano_icl".to_string(),
+                                            voice_type: "S_TfBFm6r41".to_string(),
                                             enc_format: "pcm".to_string(),
                                         };
 

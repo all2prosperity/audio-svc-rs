@@ -53,4 +53,10 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(roles, sections, sessions, user_role, users,);
+diesel::allow_tables_to_appear_in_same_query!(
+    roles,
+    sections,
+    sessions,
+    user_role,
+    users,
+);
