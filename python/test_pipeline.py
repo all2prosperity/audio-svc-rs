@@ -7,8 +7,11 @@ import wave
 
 async def test_audio_pipeline():
     # 连接WebSocket服务器
-    uri = "ws://localhost:3000/api/stream"
-    async with websockets.connect(uri) as websocket:
+    uri = "ws://localhost:3000/api/ws/stream"
+    extra_headers = {
+        'x-oz-dev-id': 'trevor'  # 替换为实际的开发者ID
+    }
+    async with websockets.connect(uri, additional_headers=extra_headers) as websocket:
         # 生成会话ID
         session_id = str(uuid.uuid4())
         
@@ -34,10 +37,10 @@ async def test_audio_pipeline():
             return
             
         # 读取音频文件
-        with wave.open("test.wav", "rb") as wav_file:
+        with open("test.pcm", "rb") as pcm_file:
             chunk_size = 48000  # 每个块2秒的音频
             while True:
-                chunk = wav_file.readframes(chunk_size)
+                chunk = pcm_file.read(chunk_size)
                 if not chunk:
                     break
                     

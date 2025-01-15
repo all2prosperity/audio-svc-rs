@@ -10,6 +10,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use llm_audio_toolkit::asr::{volc::VolcanoConfig, volc::VolcanoEchoMage, EchoMage};
 use llm_audio_toolkit::tts::volc::{VolcConfig as TTSConfig, VolcWsTTS};
 use llm_audio_toolkit::tts::SpellCaster;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tracing::{error, info};
@@ -38,7 +39,7 @@ struct StartSessionPayload {
 struct WebSocketMessage {
     #[serde(rename = "type")]
     msg_type: String,
-    payload: Value,
+    payload: Option<Value>,
 }
 
 // WebSocket upgrade handler
@@ -52,6 +53,7 @@ pub async fn ws_handler(
 
 // 处理 WebSocket 连接
 async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: CurrentUser) {
+    debug!("WebSocket connection established");
     let mut session_started = false;
     let mut asr: Option<VolcanoEchoMage> = None;
     let mut role_id: Option<String> = None;
@@ -78,14 +80,16 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
             match ws_msg.msg_type.as_str() {
                 START_SESSION_MSG => {
                     if let Ok(payload) =
-                        serde_json::from_value::<StartSessionPayload>(ws_msg.payload)
+                        serde_json::from_value::<StartSessionPayload>(ws_msg.payload.unwrap())
                     {
                         info!("Starting session: {:?}", payload);
 
                         // 初始化 VolcanoEchoMage
                         let config = VolcanoConfig {
-                            app_id: "7900512007".to_string(),
-                            token: "y3uH1UFivyu4q6gKnwKKIA3snC3FXiXb".to_string(),
+                            //app_id: "7900512007".to_string(),
+                            app_id: "3806621263".to_string(),
+                            token: "wfm_Jdp4wR0CcQsPXZRQ-GfAMmGnyB0p".to_string(),
+                            //token: "y3uH1UFivyu4q6gKnwKKIA3snC3FXiXb".to_string(),
                             cluster: "volcengine_streaming_common".to_string(),
                             audio_format: "raw".to_string(),
                             codec: "raw".to_string(),
@@ -122,6 +126,7 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
                             error!("Failed to send session_started: {}", e);
                             break;
                         }
+                        debug!("Session started");
                     } else {
                         error!("Failed to parse start_session payload");
                         socket
@@ -144,7 +149,7 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
                         continue;
                     }
 
-                    if let Value::String(audio_data) = ws_msg.payload {
+                    if let Some(Value::String(audio_data)) = ws_msg.payload {
                         if let Ok(decoded) = BASE64.decode(audio_data.as_bytes()) {
                             if let Some(asr) = &mut asr {
                                 if let Err(e) = asr.send_audio(&decoded).await {

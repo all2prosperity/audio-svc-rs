@@ -1,10 +1,13 @@
 use axum::middleware;
 use axum::routing::post;
 use axum::{extract::State, http, routing::get, Router};
+use chrono::Local;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
-use oz_server::handlers::{auth, chat, get_roles, switch_role};
+use env_logger::{Builder, WriteStyle};
+use oz_server::handlers::{auth, chat, echo_mage, get_roles, switch_role};
 use oz_server::{config::OZ_SERVER_CONFIG, structures::AppState};
+use std::io::Write;
 use tower_http::cors::{Any, CorsLayer};
 
 async fn health_check(State(_state): State<AppState>) -> &'static str {
@@ -46,12 +49,28 @@ async fn setup_router(app_state: AppState) -> Router {
             post(chat::chat_session_history),
         )
         .route("/api/add_role", post(chat::add_role))
+        .route("/api/ws/stream", get(echo_mage::ws_handler))
         .route_layer(middleware::from_fn(auth::auth))
         .layer(cors)
         .with_state(app_state)
 }
 
 async fn _main() {
+    Builder::from_default_env()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{} [{}] - {}",
+                Local::now().format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                record.args()
+            )
+        })
+        .write_style(WriteStyle::Always)
+        .filter_level(log::LevelFilter::Debug)
+        .filter_module("oz_server", log::LevelFilter::Debug)
+        .init();
+
     // 设置数据库连接池
     let database_url = OZ_SERVER_CONFIG.get::<String>("database_url").unwrap();
     let manager = ConnectionManager::<PgConnection>::new(database_url);
