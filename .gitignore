@@ -105,3 +105,4 @@ Cargo.lock
 #.idea/
 
 rust-toolchain
+*.config.json
