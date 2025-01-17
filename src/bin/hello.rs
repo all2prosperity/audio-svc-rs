@@ -1,14 +1,10 @@
-use axum::{
-    routing::get,
-    Router,
-};
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use oz_server::{config::OZ_SERVER_CONFIG, structures::AppState};
 use oz_server::handlers::chat;
 use oz_server::utils::mqtt;
 
-async fn test_llm() {
+pub async fn test_llm() {
 // build our application with a single route
     let database_url = OZ_SERVER_CONFIG.get::<String>("database_url").unwrap();
     let manager = ConnectionManager::<PgConnection>::new(database_url);

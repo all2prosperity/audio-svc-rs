@@ -5,7 +5,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Extension,
 };
-use diesel::{associations::HasTable, SelectableHelper as _};
+use diesel::{SelectableHelper as _};
 
 use crate::models::{
     role::Role,
@@ -14,7 +14,6 @@ use crate::models::{
 use crate::structures::user::CurrentUser;
 use crate::structures::{AppState, CommonResponse, RoleInfo, RoleResponse, SwitchRoleRequest};
 use crate::{
-    models::schema::roles::dsl::*,
     structures::{CreateRolePayload, CreateRoleRequest, CreateRoleResponse},
 };
 use diesel::prelude::*;

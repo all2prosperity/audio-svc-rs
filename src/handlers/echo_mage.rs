@@ -1,7 +1,6 @@
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        Json, State,
+        ws::{Message, WebSocket, WebSocketUpgrade}, State,
     },
     response::Response,
     Extension,
@@ -11,7 +10,7 @@ use llm_audio_toolkit::asr::{volc::VolcanoConfig, volc::VolcanoEchoMage, EchoMag
 use llm_audio_toolkit::tts::volc::{VolcConfig as TTSConfig, VolcWsTTS};
 use llm_audio_toolkit::tts::SpellCaster;
 use log::debug;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use serde_json::{json, Value};
 use tracing::{error, info};
 
@@ -45,7 +44,7 @@ struct WebSocketMessage {
 // WebSocket upgrade handler
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    State(mut app_state): State<AppState>,
+    State(app_state): State<AppState>,
     Extension(user): Extension<CurrentUser>,
 ) -> Response {
     ws.on_upgrade(move |socket| handle_socket(socket, app_state, user))
@@ -56,7 +55,7 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
     debug!("WebSocket connection established");
     let mut session_started = false;
     let mut asr: Option<VolcanoEchoMage> = None;
-    let mut role_id: Option<String> = None;
+    let role_id: Option<String> = None;
     //let mut audio_buffer = Vec::new();
 
     while let Some(msg) = socket.recv().await {

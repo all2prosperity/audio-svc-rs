@@ -32,13 +32,10 @@ use diesel::SelectableHelper;
 use std::time::SystemTime;
 
 use axum::{
-    extract::{Extension, Query, Request, State},
-    http,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode},
-    middleware::{self, Next},
-    response::{IntoResponse, Response},
-    routing::get,
-    Json, Router,
+    response::{IntoResponse},
+    Json,
 };
 
 use crossbeam::channel::{Receiver, Sender};
@@ -50,7 +47,7 @@ pub struct ChatResponse {
     pub is_end: bool,
 }
 
-use crate::json::chat::{ChatHistoryRequest, ChatRequest};
+use crate::json::chat::{ChatHistoryRequest};
 
 pub struct Chat<'a> {
     user_id: String,
@@ -168,12 +165,12 @@ async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
     let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
     let split_text = re.split(&message).collect::<Vec<&str>>();
     for text in split_text {
-        sender.send(ChatResponse {
+        let _ = sender.send(ChatResponse {
             split_text: text.to_string(),
             is_end: false,
         });
     }
-    sender.send(ChatResponse {
+    let _ = sender.send(ChatResponse {
         split_text: "".to_string(),
         is_end: true,
     });
@@ -222,7 +219,7 @@ impl<'a> Chat<'a> {
         );
 
         if !is_first {
-            self.fill_message_by_session_id(&mut messages, self.session_id.clone())
+            let _ = self.fill_message_by_session_id(&mut messages, self.session_id.clone())
                 .await;
         }
 
@@ -266,7 +263,7 @@ impl<'a> Chat<'a> {
         let device_id = self.user_id.clone();
 
         tokio::spawn(async move {
-            mqtt::publish_message(self_message, device_message, device_id).await;
+            let _ = mqtt::publish_message(self_message, device_message, device_id).await;
         });
 
         Ok(receiver)
@@ -461,7 +458,7 @@ pub async fn add_role(
         "".to_string(),
         &mut app_state,
     );
-    chat.add_role(request.name, request.prompt).await;
+    let _ = chat.add_role(request.name, request.prompt).await;
 
     Ok(StatusCode::OK.into_response())
 }
