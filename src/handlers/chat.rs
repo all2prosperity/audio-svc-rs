@@ -1,20 +1,20 @@
 use crate::config::OZ_SERVER_CONFIG;
 use crate::constant::*;
-use crate::utils::mqtt;
 use crate::json::chat_history_response::{ChatHistoryResponse, History, Payload};
 use crate::json::chat_session_history::{
     ChatSessionHistoryRequest, ChatSessionHistoryResponse, History as ChatSessionHistoryHistory,
 };
 use crate::json::openai_response::OpenAIResponse;
 use crate::json::role::AddRoleRequest;
+use crate::models::role;
 use crate::models::schema;
 use crate::models::schema::roles::dsl;
 use crate::models::section::Section;
 use crate::models::session::Session;
-use crate::models::role;
 use crate::structures::app_error::AppError;
 use crate::structures::app_state::AppState;
 use crate::utils;
+use crate::utils::mqtt;
 use anyhow::Result;
 use async_openai::types::ChatCompletionRequestMessage;
 use async_openai::{
@@ -29,17 +29,18 @@ use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;
 use diesel::SelectableHelper;
+use log::debug;
 use std::time::SystemTime;
 
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse},
+    response::IntoResponse,
     Json,
 };
 
-use crossbeam::channel::{Receiver, Sender};
 use regex::Regex;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 #[derive(Debug)]
 pub struct ChatResponse {
@@ -47,7 +48,7 @@ pub struct ChatResponse {
     pub is_end: bool,
 }
 
-use crate::json::chat::{ChatHistoryRequest};
+use crate::json::chat::ChatHistoryRequest;
 
 pub struct Chat<'a> {
     user_id: String,
@@ -158,29 +159,33 @@ impl<'a> Chat<'a> {
 
         Ok(false)
     }
-
 }
 
 async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
     let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
     let split_text = re.split(&message).collect::<Vec<&str>>();
     for text in split_text {
-        let _ = sender.send(ChatResponse {
-            split_text: text.to_string(),
-            is_end: false,
-        });
+        debug!("send_split_message: {:?}", text);
+        let _ = sender
+            .send(ChatResponse {
+                split_text: text.to_string(),
+                is_end: false,
+            })
+            .await;
     }
-    let _ = sender.send(ChatResponse {
-        split_text: "".to_string(),
-        is_end: true,
-    });
+    let _ = sender
+        .send(ChatResponse {
+            split_text: "".to_string(),
+            is_end: true,
+        })
+        .await;
 }
 
 impl<'a> Chat<'a> {
     pub async fn on_recv_message(&mut self, message: String) -> Result<Receiver<ChatResponse>> {
         println!("recv message: {}", message);
 
-        let (sender, receiver) = crossbeam::channel::unbounded();
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
         let mut is_first = false;
         if self.session_id == "" {
@@ -219,7 +224,8 @@ impl<'a> Chat<'a> {
         );
 
         if !is_first {
-            let _ = self.fill_message_by_session_id(&mut messages, self.session_id.clone())
+            let _ = self
+                .fill_message_by_session_id(&mut messages, self.session_id.clone())
                 .await;
         }
 
@@ -250,11 +256,15 @@ impl<'a> Chat<'a> {
             let _ = self.finish_insert_session().await;
         }
 
-        let _ = self.finish_insert_message(message.clone(), openai_response.choices[0].message.content.clone())
+        let _ = self
+            .finish_insert_message(
+                message.clone(),
+                openai_response.choices[0].message.content.clone(),
+            )
             .await;
 
         let content = openai_response.choices[0].message.content.clone();
-        tokio::spawn(async move {
+        tokio::spawn(async {
             send_split_message(content, sender).await;
         });
 
@@ -373,7 +383,7 @@ impl<'a> Chat<'a> {
 //         serde_json::to_string(&request).unwrap(),
 //         headers
 //     );
-    
+
 //     // let mut chat = Chat::new(
 //     //     request.user_id,
 //     //     request.session_id,
@@ -461,4 +471,62 @@ pub async fn add_role(
     let _ = chat.add_role(request.name, request.prompt).await;
 
     Ok(StatusCode::OK.into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use diesel::{
+        r2d2::{ConnectionManager, Pool},
+        PgConnection,
+    };
+
+    use super::*;
+    // use log::{Builder, LevelFilter, Record};
+    // use std::io::Write;
+    // use std::time::Local;
+
+    #[tokio::test]
+    async fn test_chat() {
+        // Builder::from_default_env()
+        //     .format(|buf, record| {
+        //     writeln!(
+        //         buf,
+        //         "{} [{}] - {}",
+        //         Local::now().format("%Y-%m-%d %H:%M:%S"),
+        //         record.level(),
+        //         record.args()
+        //     )
+        // })
+        // .write_style(WriteStyle::Always)
+        // .filter_level(log::LevelFilter::Debug)
+        // .filter_module("oz_server", log::LevelFilter::Debug)
+        // .init();
+
+        // 设置数据库连接池
+        //let database_url = OZ_SERVER_CONFIG.get::<String>("database_url").unwrap();
+        let manager =
+            ConnectionManager::<PgConnection>::new("postgres://oz_liutong:1157039@localhost/oz_db");
+        let pool = Pool::builder()
+            .build(manager)
+            .expect("Failed to create pool.");
+
+        let mut app_state = AppState::new(pool, OZ_SERVER_CONFIG.clone());
+
+        let mut chat = Chat::new(
+            "default_user".to_string(),
+            "".to_string(),
+            "default_role".to_string(),
+            &mut app_state,
+        );
+        let mut receiver = chat.on_recv_message("hello".to_string()).await.unwrap();
+        loop {
+            println!("receiver ready to recv");
+            let chat_response = receiver.recv().await;
+            if chat_response.is_none() {
+                break;
+            }
+            let chat_response = chat_response.unwrap();
+            println!("chat_response: {:?}", chat_response.split_text);
+        }
+    }
 }

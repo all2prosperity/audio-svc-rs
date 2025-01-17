@@ -1,6 +1,7 @@
 use axum::{
     extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade}, State,
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
     },
     response::Response,
     Extension,
@@ -10,7 +11,7 @@ use llm_audio_toolkit::asr::{volc::VolcanoConfig, volc::VolcanoEchoMage, EchoMag
 use llm_audio_toolkit::tts::volc::{VolcConfig as TTSConfig, VolcWsTTS};
 use llm_audio_toolkit::tts::SpellCaster;
 use log::debug;
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{error, info};
 
@@ -175,21 +176,27 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
                                 );
 
                                 match chat.on_recv_message(text).await {
-                                    Ok(receiver) => {
-                                        // 创建TTS配置
-                                        let tts_config = TTSConfig {
-                                            app_id: "7900512007".to_string(),
-                                            token: "y3uH1UFivyu4q6gKnwKKIA3snC3FXiXb".to_string(),
-                                            cluster: "volcano_icl".to_string(),
-                                            voice_type: "S_TfBFm6r41".to_string(),
-                                            enc_format: "pcm".to_string(),
-                                        };
-
-                                        // 创建TTS实例
-                                        let mut tts = VolcWsTTS::new(tts_config);
-
+                                    Ok(mut chat_receiver) => {
+                                        debug!("chat_receiver ready to recv for tts");
                                         // 从Chat的receiver中接收消息并进行TTS转换
-                                        while let Ok(chat_response) = receiver.recv() {
+                                        loop {
+                                            debug!("receiver ready to recv for tts and enter loop");
+                                            let chat_response = chat_receiver.recv().await;
+                                            if chat_response.is_none() {
+                                                debug!("chat_response is none");
+                                                break;
+                                            }
+                                            let chat_response = chat_response.unwrap();
+                                            debug!("chat_response: {:?}", chat_response.split_text);
+                                            let tts_config = TTSConfig {
+                                                app_id: "7900512007".to_string(),
+                                                token: "y3uH1UFivyu4q6gKnwKKIA3snC3FXiXb"
+                                                    .to_string(),
+                                                cluster: "volcano_icl".to_string(),
+                                                voice_type: "S_TfBFm6r41".to_string(),
+                                                enc_format: "pcm".to_string(),
+                                            };
+                                            let mut tts = VolcWsTTS::new(tts_config);
                                             if let Err(e) =
                                                 tts.init(&chat_response.split_text).await
                                             {
@@ -198,10 +205,10 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
                                             }
 
                                             match tts.stream_synthesize().await {
-                                                Ok(tts_receiver) => {
+                                                Ok(mut tts_receiver) => {
                                                     // 处理TTS的音频流
-                                                    while let Ok(synth_response) =
-                                                        tts_receiver.recv()
+                                                    while let Some(synth_response) =
+                                                        tts_receiver.recv().await
                                                     {
                                                         if !synth_response.audio.is_empty() {
                                                             // 将音频数据转换为base64
