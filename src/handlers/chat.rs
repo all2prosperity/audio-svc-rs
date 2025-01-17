@@ -1,6 +1,6 @@
 use crate::config::OZ_SERVER_CONFIG;
 use crate::constant::*;
-use crate::constant::*;
+use crate::utils::mqtt;
 use crate::json::chat_history_response::{ChatHistoryResponse, History, Payload};
 use crate::json::chat_session_history::{
     ChatSessionHistoryRequest, ChatSessionHistoryResponse, History as ChatSessionHistoryHistory,
@@ -11,7 +11,7 @@ use crate::models::schema;
 use crate::models::schema::roles::dsl;
 use crate::models::section::Section;
 use crate::models::session::Session;
-use crate::models::{establish_connection, role};
+use crate::models::role;
 use crate::structures::app_error::AppError;
 use crate::structures::app_state::AppState;
 use crate::utils;
@@ -250,16 +250,25 @@ impl<'a> Chat<'a> {
                 .unwrap();
 
         if is_first {
-            self.finish_insert_session().await;
+            let _ = self.finish_insert_session().await;
         }
 
-        self.finish_insert_message(message, openai_response.choices[0].message.content.clone())
+        let _ = self.finish_insert_message(message.clone(), openai_response.choices[0].message.content.clone())
             .await;
 
         let content = openai_response.choices[0].message.content.clone();
         tokio::spawn(async move {
             send_split_message(content, sender).await;
         });
+
+        let device_message = openai_response.choices[0].message.content.clone();
+        let self_message = message.clone();
+        let device_id = self.user_id.clone();
+
+        tokio::spawn(async move {
+            mqtt::publish_message(self_message, device_message, device_id).await;
+        });
+
         Ok(receiver)
     }
 
