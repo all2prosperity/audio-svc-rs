@@ -31,6 +31,7 @@ diesel::table! {
         session_id -> Varchar,
         user_id -> Varchar,
         role_id -> Varchar,
+        title -> Text,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }

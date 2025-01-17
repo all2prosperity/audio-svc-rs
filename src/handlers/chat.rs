@@ -159,6 +159,54 @@ impl<'a> Chat<'a> {
         Ok(false)
     }
 
+    fn generate_open_client(&self) -> Client<config::OpenAIConfig> {
+        let config = config::OpenAIConfig::new()
+            .with_api_base(API_BASE_URL)
+            .with_api_key(OZ_SERVER_CONFIG.get::<String>(OPEN_API_KEY).unwrap());
+
+        Client::with_config(config)
+    }
+
+    async fn generate_session_title(&mut self, mut messages: Vec<ChatCompletionRequestMessage>, device_message: String) -> Result<String> {
+        let client = self.generate_open_client();
+
+        messages.push(
+            ChatCompletionRequestUserMessageArgs::default()
+                .content(PROMPT_GENERATE_SESSION_TITLE.to_string())
+                .build()?
+                .into(),
+        );
+
+        messages.push(
+            ChatCompletionRequestAssistantMessageArgs::default()
+                .content(device_message)
+                .build()?
+                .into(),
+        );
+
+        let request = CreateChatCompletionRequestArgs::default()
+            .max_tokens(MAX_TOKENS)
+            .model("deepseek-chat")
+            .messages(messages)
+            .build()?;
+
+        let response = client.chat().create(request).await?;
+
+        let openai_response =
+            serde_json::from_str::<OpenAIResponse>(&serde_json::to_string(&response)?)?;
+
+        let title = openai_response.choices[0].message.content.clone();
+
+        Ok(title)
+    }
+
+    async fn save_session_title(&self, title: String) -> Result<(), anyhow::Error> {
+        diesel::update(schema::sessions::table.filter(schema::sessions::session_id.eq(self.session_id.clone())))
+            .set(schema::sessions::title.eq(title))
+            .execute(&mut self.app_state.db_pool.get()?)?;
+
+        Ok(())
+    }
 }
 
 async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
@@ -204,11 +252,7 @@ impl<'a> Chat<'a> {
             "Role not found",
         )))?;
 
-        let config = config::OpenAIConfig::new()
-            .with_api_base(API_BASE_URL)
-            .with_api_key(OZ_SERVER_CONFIG.get::<String>(OPEN_API_KEY).unwrap());
-
-        let client = Client::with_config(config);
+        let client = self.generate_open_client();
 
         let mut messages = Vec::new();
         messages.push(
@@ -231,40 +275,42 @@ impl<'a> Chat<'a> {
         );
 
         let request = CreateChatCompletionRequestArgs::default()
-            .max_tokens(512u32)
+            .max_tokens(MAX_TOKENS)
             .model("deepseek-chat")
-            .messages(messages)
+            .messages(messages.clone())
             .build()?;
-
-        println!("{}\n\n", serde_json::to_string(&request).unwrap());
 
         let response = client.chat().create(request).await?;
 
-        println!("{}", serde_json::to_string(&response).unwrap());
-
         let openai_response =
-            serde_json::from_str::<OpenAIResponse>(&serde_json::to_string(&response).unwrap())
-                .unwrap();
+            serde_json::from_str::<OpenAIResponse>(&serde_json::to_string(&response)?)?;
 
         if is_first {
             let _ = self.finish_insert_session().await;
         }
 
-        let _ = self.finish_insert_message(message.clone(), openai_response.choices[0].message.content.clone())
+        let device_message = openai_response.choices[0].message.content.clone();
+
+        let _ = self.finish_insert_message(message.clone(), device_message.clone())
             .await;
 
-        let content = openai_response.choices[0].message.content.clone();
+        let device_message_clone_for_split = device_message.clone();
         tokio::spawn(async move {
-            send_split_message(content, sender).await;
+            send_split_message(device_message_clone_for_split, sender).await;
         });
 
-        let device_message = openai_response.choices[0].message.content.clone();
         let self_message = message.clone();
         let device_id = self.user_id.clone();
+        let device_message_clone_for_mqtt = device_message.clone();
 
         tokio::spawn(async move {
-            let _ = mqtt::publish_message(self_message, device_message, device_id).await;
+            let _ = mqtt::publish_message(self_message, device_message_clone_for_mqtt, device_id).await;
         });
+
+        if is_first {
+            let title = self.generate_session_title(messages, device_message).await?;
+            self.save_session_title(title).await?;
+        }
 
         Ok(receiver)
     }
