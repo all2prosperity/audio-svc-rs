@@ -6,10 +6,10 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::PgConnection;
 use oz_server::{config::OZ_SERVER_CONFIG, structures::AppState};
 use oz_server::handlers::chat;
+use oz_server::utils::mqtt;
 
-#[tokio::main]
-async fn main() {
-    // build our application with a single route
+async fn test_llm() {
+// build our application with a single route
     let database_url = OZ_SERVER_CONFIG.get::<String>("database_url").unwrap();
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     let pool = Pool::builder()
@@ -25,4 +25,11 @@ async fn main() {
     for msg in receiver {
         println!("msg: {:?}", msg);
     }
+}
+
+#[tokio::main]
+async fn main() {
+    mqtt::publish_event("test".to_string(), "4322f33b-3cac-49e4-8310-0584e9608220".to_string()).await.unwrap();
+
+    mqtt::publish_message("test".to_string(), "test".to_string(), "4322f33b-3cac-49e4-8310-0584e9608220".to_string()).await.unwrap();
 }

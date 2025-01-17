@@ -1,3 +1,4 @@
+pub mod mqtt;
 use crate::models::establish_connection;
 use crate::models::role::Role;
 use crate::models::schema;
@@ -32,6 +33,6 @@ pub fn insert_default_role() {
     }
 }
 
-pub fn genNewId() -> String {
+pub fn gen_new_id() -> String {
     xid::new().to_string()
 }

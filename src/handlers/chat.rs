@@ -96,7 +96,7 @@ impl<'a> Chat<'a> {
         assistant_message: String,
     ) -> Result<String> {
         let section = Section {
-            section_id: utils::genNewId(),
+            section_id: utils::gen_new_id(),
             session_id: self.session_id.clone(),
             user_message: message,
             assistant_message: assistant_message,
@@ -187,11 +187,11 @@ impl<'a> Chat<'a> {
 
         let mut is_first = false;
         if self.session_id == "" {
-            self.session_id = utils::genNewId();
+            self.session_id = utils::gen_new_id();
             is_first = true;
         } else {
             if self.check_need_new_session().await? {
-                self.session_id = utils::genNewId();
+                self.session_id = utils::gen_new_id();
                 is_first = true;
             }
         }
@@ -336,7 +336,7 @@ impl<'a> Chat<'a> {
         prompt: String,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let role = role::Role {
-            id: utils::genNewId(),
+            id: utils::gen_new_id(),
             is_default: false,
             created_by: self.user_id.clone(),
             name,
