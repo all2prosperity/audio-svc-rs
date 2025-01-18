@@ -19,7 +19,7 @@ pub async fn test_llm() {
         "1".to_string(),
         "4322f33b-3cac-49e4-8310-0584e9608220".to_string(),
         "1".to_string(),
-        &mut app_state,
+        app_state.db_pool.clone(),
     );
     let mut receiver = chat
         .on_recv_message("那你给我讲讲炉石规则吧".to_string())

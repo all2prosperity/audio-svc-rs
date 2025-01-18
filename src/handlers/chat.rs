@@ -25,7 +25,8 @@ use async_openai::{
     },
     Client,
 };
-use diesel::ExpressionMethods;
+use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::{ExpressionMethods, PgConnection};
 use diesel::QueryDsl;
 use diesel::RunQueryDsl;
 use diesel::SelectableHelper;
@@ -41,6 +42,7 @@ use axum::{
 
 use regex::Regex;
 use tokio::sync::mpsc::{Receiver, Sender};
+use futures_util::stream::StreamExt;
 
 #[derive(Debug)]
 pub struct ChatResponse {
@@ -50,25 +52,25 @@ pub struct ChatResponse {
 
 use crate::json::chat::ChatHistoryRequest;
 
-pub struct Chat<'a> {
+pub struct Chat {
     user_id: String,
     session_id: String,
     role_id: String,
-    app_state: &'a mut AppState,
+    db_pool: Pool<ConnectionManager<PgConnection>>,
 }
 
-impl<'a> Chat<'a> {
+impl Chat {
     pub fn new(
         user_id: String,
         session_id: String,
         role_id: String,
-        app_state: &'a mut AppState,
+        db_pool: Pool<ConnectionManager<PgConnection>>,
     ) -> Self {
         Self {
             user_id,
             session_id,
             role_id,
-            app_state,
+            db_pool,
         }
     }
 
@@ -84,7 +86,7 @@ impl<'a> Chat<'a> {
 
         diesel::insert_into(schema::sessions::table)
             .values(&session)
-            .execute(&mut self.app_state.db_pool.get()?)?;
+            .execute(&mut self.db_pool.get()?)?;
         Ok("".to_string())
     }
 
@@ -104,7 +106,7 @@ impl<'a> Chat<'a> {
 
         diesel::insert_into(schema::sections::table)
             .values(&section)
-            .execute(&mut self.app_state.db_pool.get()?)?;
+            .execute(&mut self.db_pool.get()?)?;
         Ok("".to_string())
     }
 
@@ -118,7 +120,7 @@ impl<'a> Chat<'a> {
             .order(schema::sections::created_at.desc())
             .limit(SECTION_LIMIT)
             .select(Section::as_select())
-            .load(&mut self.app_state.db_pool.get()?)?;
+            .load(&mut self.db_pool.get()?)?;
 
         for section in sections.iter().rev() {
             messages.push(
@@ -143,7 +145,7 @@ impl<'a> Chat<'a> {
         let session = schema::sessions::table
             .filter(schema::sessions::session_id.eq(self.session_id.clone()))
             .select(Session::as_select())
-            .load(&mut self.app_state.db_pool.get()?)?;
+            .load(&mut self.db_pool.get()?)?;
 
         if session.is_empty() {
             return Ok(true);
@@ -211,37 +213,13 @@ impl<'a> Chat<'a> {
                 .filter(schema::sessions::session_id.eq(self.session_id.clone())),
         )
         .set(schema::sessions::title.eq(title))
-        .execute(&mut self.app_state.db_pool.get()?)?;
+        .execute(&mut self.db_pool.get()?)?;
 
         Ok(())
     }
-}
 
-async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
-    let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
-    let split_text = re.split(&message).collect::<Vec<&str>>();
-    for text in split_text {
-        debug!("send_split_message: {:?}", text);
-        let _ = sender
-            .send(ChatResponse {
-                split_text: text.to_string(),
-                is_end: false,
-            })
-            .await;
-    }
-    let _ = sender
-        .send(ChatResponse {
-            split_text: "".to_string(),
-            is_end: true,
-        })
-        .await;
-}
-
-impl<'a> Chat<'a> {
-    pub async fn on_recv_message(&mut self, message: String) -> Result<Receiver<ChatResponse>> {
+    async fn deal_message(mut self, message: String, sender: Sender<ChatResponse>) -> Result<(), anyhow::Error> {
         println!("recv message: {}", message);
-
-        let (sender, receiver) = tokio::sync::mpsc::channel(100);
 
         let mut is_first = false;
         if self.session_id == "" {
@@ -258,7 +236,7 @@ impl<'a> Chat<'a> {
             .filter(dsl::id.eq(self.role_id.clone()))
             .limit(1)
             .select(role::Role::as_select())
-            .load(&mut self.app_state.db_pool.get()?)?;
+            .load(&mut self.db_pool.get()?)?;
 
         let role = results.first().ok_or(Box::new(std::io::Error::new(
             std::io::ErrorKind::NotFound,
@@ -294,16 +272,28 @@ impl<'a> Chat<'a> {
             .messages(messages.clone())
             .build()?;
 
-        let response = client.chat().create(request).await?;
+        let mut stream = client.chat().create_stream(request).await?;
 
-        let openai_response =
-            serde_json::from_str::<OpenAIResponse>(&serde_json::to_string(&response)?)?;
+        let mut device_message = String::new();
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(response) => {
+                    response.choices.iter().for_each(|chat_choice| {
+                        if let Some(content) = &chat_choice.delta.content {
+                            println!("content from stream: {}", content);
+                            device_message.push_str(content);
+                        }
+                    });
+                }
+                Err(err) => {
+                    return Err(anyhow::anyhow!("error: {err}"));
+                }
+            }
+        }
 
         if is_first {
             let _ = self.finish_insert_session().await;
         }
-
-        let device_message = openai_response.choices[0].message.content.clone();
 
         let _ = self
             .finish_insert_message(message.clone(), device_message.clone())
@@ -330,6 +320,38 @@ impl<'a> Chat<'a> {
             self.save_session_title(title).await?;
         }
 
+        Ok(())
+    }
+
+}
+
+async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
+    let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
+    let split_text = re.split(&message).collect::<Vec<&str>>();
+    for text in split_text {
+        debug!("send_split_message: {:?}", text);
+        let _ = sender
+            .send(ChatResponse {
+                split_text: text.to_string(),
+                is_end: false,
+            })
+            .await;
+    }
+    let _ = sender
+        .send(ChatResponse {
+            split_text: "".to_string(),
+            is_end: true,
+        })
+        .await;
+}
+
+impl Chat {
+    pub async fn on_recv_message(self, message: String) -> Result<Receiver<ChatResponse>> {
+        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        tokio::spawn(async move {
+            let _ = self.deal_message(message, sender).await;
+        });
+
         Ok(receiver)
     }
 
@@ -344,7 +366,7 @@ impl<'a> Chat<'a> {
             .limit(page_size)
             .offset(page * page_size)
             .select(Session::as_select())
-            .load(&mut self.app_state.db_pool.get()?)?;
+            .load(&mut self.db_pool.get()?)?;
 
         let mut history = Vec::new();
         let total = sessions.len() as i64;
@@ -378,7 +400,7 @@ impl<'a> Chat<'a> {
             .limit(page_size)
             .offset(page * page_size)
             .select(Section::as_select())
-            .load(&mut self.app_state.db_pool.get()?)?;
+            .load(&mut self.db_pool.get()?)?;
 
         let mut history = Vec::new();
         let total = sections.len() as i64;
@@ -420,7 +442,7 @@ impl<'a> Chat<'a> {
 
         diesel::insert_into(schema::roles::table)
             .values(&role)
-            .execute(&mut self.app_state.db_pool.get()?)?;
+            .execute(&mut self.db_pool.get()?)?;
 
         Ok(())
     }
@@ -452,7 +474,7 @@ impl<'a> Chat<'a> {
 // }
 
 pub async fn chat_history(
-    mut app_state: State<AppState>,
+    app_state: State<AppState>,
     Query(query): Query<ChatHistoryRequest>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
@@ -466,7 +488,7 @@ pub async fn chat_history(
         user_id.to_string(),
         "".to_string(),
         "".to_string(),
-        &mut app_state,
+        app_state.db_pool.clone(),
     );
     if let Ok(response) = chat.get_chat_history(query.offset, query.limit).await {
         return Ok(Json(response).into_response());
@@ -476,7 +498,7 @@ pub async fn chat_history(
 }
 
 pub async fn chat_session_history(
-    mut app_state: State<AppState>,
+    app_state: State<AppState>,
     headers: HeaderMap,
     Json(request): Json<ChatSessionHistoryRequest>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -491,7 +513,7 @@ pub async fn chat_session_history(
         user_id.to_string(),
         request.chat_id,
         "".to_string(),
-        &mut app_state,
+        app_state.db_pool.clone(),
     );
     if let Ok(response) = chat
         .get_chat_session_history(request.offset, request.limit)
@@ -506,7 +528,7 @@ pub async fn chat_session_history(
 }
 
 pub async fn add_role(
-    State(mut app_state): State<AppState>,
+    State(app_state): State<AppState>,
     header: HeaderMap,
     Json(request): Json<AddRoleRequest>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -520,7 +542,7 @@ pub async fn add_role(
         user_id.to_string(),
         "".to_string(),
         "".to_string(),
-        &mut app_state,
+        app_state.db_pool.clone(),
     );
     let _ = chat.add_role(request.name, request.prompt).await;
 
@@ -564,13 +586,13 @@ mod tests {
             .build(manager)
             .expect("Failed to create pool.");
 
-        let mut app_state = AppState::new(pool, OZ_SERVER_CONFIG.clone());
+        let app_state = AppState::new(pool, OZ_SERVER_CONFIG.clone());
 
         let mut chat = Chat::new(
             "default_user".to_string(),
             "".to_string(),
             "default_role".to_string(),
-            &mut app_state,
+            app_state.db_pool.clone(),
         );
         let mut receiver = chat.on_recv_message("hello".to_string()).await.unwrap();
         loop {

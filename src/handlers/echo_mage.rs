@@ -172,7 +172,7 @@ async fn handle_socket(mut socket: WebSocket, mut app_state: AppState, user: Cur
                                     "default_user".to_string(),
                                     "".to_string(),
                                     role_id.unwrap_or("default_role".to_string()),
-                                    &mut app_state,
+                                    app_state.db_pool.clone(),
                                 );
 
                                 match chat.on_recv_message(text).await {
