@@ -18,9 +18,12 @@ pub async fn test_llm() {
     let mut chat = chat::Chat::new(
         "1".to_string(),
         "4322f33b-3cac-49e4-8310-0584e9608220".to_string(),
-        "1".to_string(),
+        "cu6vho2mmejiu257gg80".to_string(),
         app_state.db_pool.clone(),
     );
+
+    // chat.add_role("炉石规则".to_string(), "你是一个炉石高手".to_string()).await;
+
     let mut receiver = chat
         .on_recv_message("那你给我讲讲炉石规则吧".to_string())
         .await
@@ -31,8 +34,7 @@ pub async fn test_llm() {
     }
 }
 
-#[tokio::main]
-async fn main() {
+async fn test_mqtt() {
     mqtt::publish_event(
         "test".to_string(),
         "4322f33b-3cac-49e4-8310-0584e9608220".to_string(),
@@ -47,4 +49,9 @@ async fn main() {
     )
     .await
     .unwrap();
+}
+
+#[tokio::main]
+async fn main() {
+    test_llm().await;
 }

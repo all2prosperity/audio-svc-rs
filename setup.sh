@@ -1,3 +1,1 @@
-export DATABASE_URL="postgres://ckz:1@10.211.55.8:5432/llm"
-
-diesel migration run
+diesel setup --database-url='postgres://ckz:1@localhost/llm'

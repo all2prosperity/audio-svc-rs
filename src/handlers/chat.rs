@@ -349,7 +349,9 @@ impl Chat {
     pub async fn on_recv_message(self, message: String) -> Result<Receiver<ChatResponse>> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
         tokio::spawn(async move {
-            let _ = self.deal_message(message, sender).await;
+            if let Err(e) = self.deal_message(message, sender).await {
+                println!("error: {:?}", e);
+            }
         });
 
         Ok(receiver)

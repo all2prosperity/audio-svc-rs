@@ -1,2 +1,1 @@
-export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
-cargo run --bin oz_server
+diesel migration run --database-url='postgres://ckz:1@localhost/llm'
