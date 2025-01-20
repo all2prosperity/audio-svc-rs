@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use tracing::{error, info};
 
+use crate::config::global_cfg::GlobalConfig;
 use crate::{
     handlers::chat::Chat,
     structures::{user::CurrentUser, AppState},
