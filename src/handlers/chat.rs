@@ -275,20 +275,49 @@ impl Chat {
         let mut stream = client.chat().create_stream(request).await?;
 
         let mut device_message = String::new();
+        let mut cut_message = String::new();
+        let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
+
         while let Some(result) = stream.next().await {
             match result {
                 Ok(response) => {
-                    response.choices.iter().for_each(|chat_choice| {
-                        if let Some(content) = &chat_choice.delta.content {
-                            println!("content from stream: {}", content);
+                    for choice in response.choices.iter() {
+                        if let Some(content) = &choice.delta.content {
+                            // println!("content from stream: {}", content);
                             device_message.push_str(content);
+
+                            cut_message.push_str(content);
+
+                            let split_text = re.split(&cut_message).collect::<Vec<&str>>();
+                            if split_text.len() > 1 {
+                                for text in split_text.iter().take(split_text.len() - 1) {
+                                    let _ = sender.send(ChatResponse {
+                                        split_text: text.to_string(),
+                                        is_end: false,
+                                    }).await;
+                                }
+
+                                cut_message = split_text[split_text.len() - 1].to_string();
+                            }
                         }
-                    });
+                    }
                 }
                 Err(err) => {
                     return Err(anyhow::anyhow!("error: {err}"));
                 }
             }
+        }
+
+        if cut_message.len() > 0 {
+            let _ = sender.send(ChatResponse {
+                split_text: cut_message.clone(),
+                is_end: true,
+            }).await;
+        } else {
+            let _ = sender.send(ChatResponse {
+                split_text: "".to_string(),
+                is_end: true,
+            }).await;
         }
 
         if is_first {
@@ -298,11 +327,6 @@ impl Chat {
         let _ = self
             .finish_insert_message(message.clone(), device_message.clone())
             .await;
-
-        let device_message_clone_for_split = device_message.clone();
-        tokio::spawn(async move {
-            send_split_message(device_message_clone_for_split, sender).await;
-        });
 
         let self_message = message.clone();
         let device_id = self.user_id.clone();
@@ -323,26 +347,6 @@ impl Chat {
         Ok(())
     }
 
-}
-
-async fn send_split_message(message: String, sender: Sender<ChatResponse>) {
-    let re = Regex::new(r"(,|\\.|，|。|\n\n)").unwrap();
-    let split_text = re.split(&message).collect::<Vec<&str>>();
-    for text in split_text {
-        debug!("send_split_message: {:?}", text);
-        let _ = sender
-            .send(ChatResponse {
-                split_text: text.to_string(),
-                is_end: false,
-            })
-            .await;
-    }
-    let _ = sender
-        .send(ChatResponse {
-            split_text: "".to_string(),
-            is_end: true,
-        })
-        .await;
 }
 
 impl Chat {
