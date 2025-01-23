@@ -484,7 +484,7 @@ pub async fn chat_history(
     Query(query): Query<ChatHistoryRequest>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
-    println!("hello {:?}, {:?}", query, headers);
+    debug!("hello {:?}, {:?}", query, headers);
     let user_id = headers
         .get("x-oz-user-id")
         .ok_or(AppError(anyhow::anyhow!("User id not found")))?
@@ -508,7 +508,7 @@ pub async fn chat_session_history(
     headers: HeaderMap,
     Json(request): Json<ChatSessionHistoryRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    println!("hello {:?}, {:?}", request, headers);
+    debug!("hello {:?}, {:?}", request, headers);
     let user_id = headers
         .get("x-oz-user-id")
         .ok_or(AppError(anyhow::anyhow!("User id not found")))?
@@ -538,6 +538,7 @@ pub async fn add_role(
     header: HeaderMap,
     Json(request): Json<AddRoleRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    debug!("add_role {:?}, {:?}", request, header);
     let user_id = header
         .get("x-oz-user-id")
         .ok_or(AppError(anyhow::anyhow!("User id not found")))?
